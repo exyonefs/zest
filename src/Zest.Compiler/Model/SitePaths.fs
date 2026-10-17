@@ -18,13 +18,13 @@ open System.Text.RegularExpressions
 /// Conventional directory names, relative to the project root.
 module SiteDirectories =
 
-    /// Content pages (.md, .zest.fsx, .ztk, .html). Falls back to the root.
+    /// Content pages (.md, .zest.fsx, .html, .ztk). Falls back to the root.
     let Content = "content"
 
-    /// Zestucks layouts (.ztk).
+    /// Zestucks layouts (.html; .ztk / .njk are accepted alternates).
     let Layouts = "_layouts"
 
-    /// Zestucks partials (.ztk).
+    /// Zestucks partials (.html; .ztk / .njk are accepted alternates).
     let Includes = "_includes"
 
     /// Global data files (.toml).

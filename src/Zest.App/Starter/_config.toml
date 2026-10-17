@@ -1,6 +1,7 @@
 # Zest site configuration.
 #
-# [site] → metadata surfaced to templates as `site.*`
+# [site]       → metadata surfaced to templates as `site.*`
+# [pagination] → how many entries each listing page shows
 #
 # Everything here is optional: delete this file and the site still builds.
 
@@ -10,3 +11,6 @@ description = "A flat, minimal static blog: one HTML file per page, one styleshe
 url = "https://example.com"
 author = "Zest User"
 language = "en"
+
+[pagination]
+per_page = 5

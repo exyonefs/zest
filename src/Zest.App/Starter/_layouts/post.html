@@ -1,0 +1,36 @@
+{# post.html — a dated entry: title, date, body, and a footer carrying the
+   tag list, the category and the way back to the archive.
+
+   Dates render as a real <time> element so machines read them as well as
+   people. Tags and categories link into the pages the taxonomy generator
+   writes under /tags/ and /categories/. #}
+{% extends "shell" %}
+
+{% block content %}
+<article class="entry">
+  <header class="entry__header">
+    <h1 class="entry__title">{{ page.title }}</h1>
+    {% if page.date %}
+    <p class="entry__meta"><time datetime="{{ page.date }}">{{ page.date }}</time></p>
+    {% endif %}
+  </header>
+
+  <div class="entry__body">{{ content | safe }}</div>
+
+  <footer class="entry__footer">
+    {% if page.tags %}
+    <p class="entry__tags">
+      <span class="entry__tag-label">Tags</span>
+      {% for tag in page.tags %}<a href="/tags/{{ tag | slugify }}/">{{ tag }}</a>{% endfor %}
+    </p>
+    {% endif %}
+    {% if page.categories %}
+    <p class="entry__tags">
+      <span class="entry__tag-label">Filed under</span>
+      {% for category in page.categories %}<a href="/categories/{{ category | slugify }}/">{{ category }}</a>{% endfor %}
+    </p>
+    {% endif %}
+    <p class="entry__nav"><a href="/archive/">All posts</a> &middot; <a href="/">Home</a></p>
+  </footer>
+</article>
+{% endblock %}

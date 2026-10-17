@@ -1,0 +1,7 @@
+{# category.html — every post in one category, resolved by the taxonomy
+   generator for /categories/<term>/. Shares the listing component with the
+   tag pages and the home page. #}
+{% set posts = term_pages %}
+{% include "post-list.html" %}
+
+<p class="entry__nav"><a href="/categories/">All categories</a> &middot; <a href="/archive/">Archive</a> &middot; <a href="/">Home</a></p>

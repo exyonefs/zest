@@ -161,7 +161,7 @@ internal static class HelpRenderer
         {
             ["version"] = "0.0.0",
             ["header"] = "Zest v{0} — Zealous Efficient Static Toolkit",
-            ["ecosystem"] = "Ecosystem: .ztk + .zest.fsx + .zcss"
+            ["ecosystem"] = "Ecosystem: .html + .zest.fsx + .zcss"
         };
         t["meta"] = meta;
         return t;

@@ -45,12 +45,13 @@ module FileTypes =
     let HtmlLong = ".htm"
 
     /// Zestucks template. Zestucks is Zest's Nunjucks-compatible template
-    /// language; `.ztk` is its file extension (Ze-stucks).
+    /// language; `.html` is its primary file extension and `.ztk` (Ze-stucks)
+    /// the backup one.
     [<Literal>]
     let Zestucks = ".ztk"
 
-    /// Nunjucks-compatible counterpart to `.ztk`. Same engine, same syntax —
-    /// files ported from Nunjucks keep working without being renamed.
+    /// Nunjucks-compatible counterpart to the Zestucks templates. Same engine,
+    /// same syntax — files ported from Nunjucks keep working unchanged.
     [<Literal>]
     let Nunjucks = ".njk"
 

@@ -1,33 +1,41 @@
 /* ---------------------------------------------------------------------------
    style.zcss — the only stylesheet the site links.
 
-   One file, top to bottom: design tokens first, then the reset and document
-   typography, then the site chrome, the article block, the listings, and the
-   responsive / print rules. The `let` bindings at the top are the tokens every
-   rule below reads, the way the imported partials of a split sheet would.
+   Naming, in one paragraph:
+
+     tokens     `color-*`, `font-*`, `width-*` — what the value is for, not
+                what it looks like. `color-text` never becomes a lie when the
+                palette changes.
+     blocks     one noun per component: `layout`, `header`, `main`, `footer`,
+                `entry`, `post-list`, `pager`, `term-list`, `archive`.
+     elements   `block__part`: `.header__nav`, `.entry__title`.
+     modifiers  `block__part--state`: `.pager__step--disabled`.
+
+   Every class name in this file is emitted by exactly one place:
+   _includes/ (leaf components), _layouts/ (page frames) or a content page.
+   Renaming a class means updating that one producer.
 
    ZCSS is a CSS superset — F#-style `let` bindings, nesting-free rule blocks
    in square brackets — compiled to plain CSS at build time. The build writes
-   the compiled result next to this file's output as style.css, so the only
-   stylesheet the browser downloads is style.css.
+   the compiled result next to this file as style.css.
 
    Register this file in src/Zest.App/Zest.App.csproj so that `zest init`
    copies it into new sites.
    --------------------------------------------------------------------------- */
 
-/* -- Design tokens ---------------------------------------------------------
-   The one place colours and font stacks are written down. The font stacks are
-   system fonts only: no webfont request ever leaves the reader's machine. */
+/* -- Tokens ---------------------------------------------------------------
+   Colours, font stacks and the reading width. The font stacks are system
+   fonts only: no webfont request ever leaves the reader's machine. */
 
-let paper     = #ffffff
-let ink       = #1c1c1a
-let muted     = #6f6f68
-let link      = #0b5394
-let surface   = #f6f6f2
-let rule      = #e3e3de
-let font-sans = system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
-let font-mono = ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace
-let measure   = 40rem
+let color-bg      = #ffffff
+let color-text    = #1c1c1a
+let color-muted   = #6f6f68
+let color-accent  = #0b5394
+let color-surface = #f6f6f2
+let color-border  = #e3e3de
+let font-body     = system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
+let font-code     = ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace
+let width-content = 40rem
 
 /* -- Reset and document typography --------------------------------------- */
 
@@ -39,9 +47,9 @@ let measure   = 40rem
 ]
 
 body [
-  background: paper;
-  color: ink;
-  font-family: font-sans;
+  background: color-bg;
+  color: color-text;
+  font-family: font-body;
   font-size: 1rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -65,7 +73,7 @@ ul, ol [
 ]
 
 a [
-  color: link;
+  color: color-accent;
   text-decoration: none;
 ]
 
@@ -75,7 +83,7 @@ a:hover [
 ]
 
 ::focus-visible [
-  outline: 2px solid link;
+  outline: 2px solid color-accent;
   outline-offset: 2px;
 ]
 
@@ -89,15 +97,15 @@ img [
 ]
 
 blockquote [
-  background: surface;
+  background: color-surface;
   padding: 0.875rem 1.125rem;
-  border-left: 3px solid rule;
-  color: muted;
+  border-left: 3px solid color-border;
+  color: color-muted;
 ]
 
 code, pre [
-  font-family: font-mono;
-  background: surface;
+  font-family: font-code;
+  background: color-surface;
 ]
 
 code [
@@ -120,167 +128,191 @@ pre code [
 ]
 
 hr [
-  border-top: 1px solid rule;
+  border-top: 1px solid color-border;
   margin-top: 2rem;
 ]
 
 table [
   width: 100%;
   border-collapse: collapse;
-  border-bottom: 2px solid ink;
-}
+  border-bottom: 2px solid color-text;
+]
 
 thead th [
-  border-bottom: 1px solid ink;
+  border-bottom: 1px solid color-text;
 ]
 
 th, td [
   padding: 0.5rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid rule;
-}
+  border-bottom: 1px solid color-border;
+]
 
-/* -- Site chrome -----------------------------------------------------------
-   The header, the navigation, the main column and the footer. The markup
-   these class names target is produced by _layouts/shell.zest.fsx, which is
-   the only layout that emits it. */
+/* -- Layout ---------------------------------------------------------------
+   The page frame: header, main column and footer, stacked as a column so the
+   footer sits at the bottom of a short page. Emitted by _layouts/shell.html. */
 
-.page [
+.layout [
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-}
+]
 
-.site-header [
+.main [
+  flex: 1;
   width: 100%;
-  max-width: measure;
+  max-width: width-content;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+]
+
+/* -- Header ---------------------------------------------------------------
+   Brand and navigation. Emitted by _includes/header.html. */
+
+.header [
+  width: 100%;
+  max-width: width-content;
   margin: 0 auto;
   padding: 1.25rem 1.5rem 1rem;
-  border-bottom: 1px solid rule;
-}
+  border-bottom: 1px solid color-border;
+]
 
-.site-header__inner [
+.header__inner [
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-}
+]
 
-.site-header__title [
-  color: ink;
+.header__brand [
+  color: color-text;
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.01em;
-}
+]
 
-.site-header__title:hover [
+.header__brand:hover [
   text-decoration: none;
-}
+]
 
-.site-nav [
+.header__nav [
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
   font-size: 0.875rem;
-}
+]
 
-.page__main [
-  flex: 1;
-  width: 100%;
-  max-width: measure;
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem 4rem;
-}
+/* -- Footer ---------------------------------------------------------------
+   Copyright and feed link. Emitted by _includes/footer.html. */
 
-.site-footer [
+.footer [
   width: 100%;
-  max-width: measure;
+  max-width: width-content;
   margin: 0 auto;
   padding: 1.25rem 1.5rem 2.5rem;
-  border-top: 1px solid rule;
-  color: muted;
+  border-top: 1px solid color-border;
+  color: color-muted;
   font-size: 0.8125rem;
-}
+]
 
-.site-footer__inner [
+.footer__inner [
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.25rem 1rem;
-}
+]
 
-.site-footer__meta [
+.footer__text [
   margin: 0;
-}
+]
 
-/* -- Article block ---------------------------------------------------------
-   The `article__*` elements every page body is built from: the title, the
-   meta line, the body, and the way back. Markup comes from
-   _layouts/default.zest.fsx (ordinary pages) and _layouts/post.zest.fsx
-   (dated entries). */
+/* -- Entry ----------------------------------------------------------------
+   One page of content: title, meta line, body, and the footer a dated entry
+   adds (tags, category, way back). Emitted by _layouts/default.html and
+   _layouts/post.html. */
 
-.article__head [
+.entry__header [
   margin-bottom: 2rem;
-}
+]
 
-.article__title [
+.entry__title [
   font-size: 1.75rem;
   line-height: 1.2;
-}
+]
 
-.article__meta [
+.entry__meta [
   margin-top: 0.5rem;
   font-size: 0.875rem;
-  color: muted;
-}
+  color: color-muted;
+]
 
-.article__body [
+.entry__body [
   word-wrap: break-word;
-}
+]
 
-.article__footer [
+.entry__footer [
   margin-top: 2.5rem;
   padding-top: 1rem;
-  border-top: 1px solid rule;
+  border-top: 1px solid color-border;
   font-size: 0.875rem;
-  color: muted;
-}
+  color: color-muted;
+]
 
-/* -- Listings --------------------------------------------------------------
-   The home page entry list — date, title, excerpt, separated by rules — and
-   the archive's per-year sections. There is no pagination: the listing is
-   one page until the archive outgrows it.
+.entry__tags [
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+]
 
-   Markup comes from content/index.zest.fsx and content/archive.zest.fsx. */
+.entry__tag-label [
+  color: color-muted;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+]
 
-.list-intro [
+.entry__nav [
+  margin-top: 1rem;
+]
+
+/* -- Intro ----------------------------------------------------------------
+   The lead paragraph above a listing. Emitted by content/index.zest.fsx and
+   the tag / category indexes. */
+
+.intro [
   margin-bottom: 2rem;
-  color: muted;
-}
+  color: color-muted;
+]
+
+/* -- Post list ------------------------------------------------------------
+   Date, title and excerpt per entry, separated by rules. Emitted by
+   _includes/post-list.html (Zestucks) and content/index.zest.fsx (F#); the
+   class names are the contract between the two. */
 
 .post-list [
   list-style: none;
   padding-left: 0;
-}
+]
 
 .post-list__item [
   padding: 1.125rem 0;
-  border-top: 1px solid rule;
-}
+  border-top: 1px solid color-border;
+]
 
 .post-list__item:first-child [
   border-top: 0;
   padding-top: 0;
-}
+]
 
 .post-list__date [
   display: block;
   font-size: 0.8125rem;
-  color: muted;
+  color: color-muted;
   font-variant-numeric: tabular-nums;
-}
+]
 
 .post-list__title [
   font-size: 1.25rem;
@@ -290,28 +322,81 @@ th, td [
 .post-list__excerpt [
   margin-top: 0.375rem;
   font-size: 0.9375rem;
-  color: muted;
-}
+  color: color-muted;
+]
+
+/* -- Pager ----------------------------------------------------------------
+   Newer / page N of M / older. A step with nowhere to go is disabled, so the
+   pager never promises a page that does not exist. Emitted by
+   _includes/pager.html and content/index.zest.fsx. */
+
+.pager [
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-border;
+  font-size: 0.875rem;
+]
+
+.pager__status [
+  color: color-muted;
+  font-variant-numeric: tabular-nums;
+]
+
+.pager__step--disabled [
+  color: color-muted;
+]
+
+/* -- Term list ------------------------------------------------------------
+   The tag and category index: one chip per term. Emitted by
+   _layouts/tags.html and _layouts/categories.html. */
+
+.term-list [
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding-left: 0;
+]
+
+.term-list__item a [
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid color-border;
+  border-radius: 3px;
+  font-size: 0.875rem;
+]
+
+.term-list__item a:hover [
+  background: color-surface;
+  text-decoration: none;
+]
+
+/* -- Archive --------------------------------------------------------------
+   Posts grouped by year. Emitted by content/archive.zest.fsx. */
 
 .archive__year [
   margin-top: 2rem;
-}
+]
 
 .archive__year:first-child [
   margin-top: 0;
-}
+]
 
 /* -- Responsive, print and motion preferences ------------------------------
    The print rules are the quiet payoff: the chrome disappears and the page
    prints as a clean document. */
 
 @media (max-width: 640px) [
-  .page__main [
+  .main [
     padding-left: 1rem;
     padding-right: 1rem;
   ]
 
-  .site-header, .site-footer [
+  .header, .footer [
     padding-left: 1rem;
     padding-right: 1rem;
   ]
@@ -323,7 +408,7 @@ th, td [
 ]
 
 @media print [
-  .site-header, .site-footer, .article__footer [
+  .header, .footer, .entry__footer, .pager [
     display: none;
   ]
 
@@ -333,7 +418,7 @@ th, td [
     font-size: 12pt;
   ]
 
-  .page__main [
+  .main [
     max-width: none;
     padding: 0;
   ]

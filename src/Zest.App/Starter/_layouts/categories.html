@@ -1,0 +1,7 @@
+{# categories.html — the category index at /categories/: one chip per term. #}
+<p class="intro">Every category used on this site, one page each.</p>
+<ul class="term-list">
+{% for t in terms %}
+  <li class="term-list__item"><a href="/{{ taxonomy.plural }}/{{ t.slug }}/">{{ t.name }}</a></li>
+{% endfor %}
+</ul>

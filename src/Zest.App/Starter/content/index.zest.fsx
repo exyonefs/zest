@@ -1,24 +1,25 @@
+// @paginate 5
 // @layout default
 
 // ---------------------------------------------------------------------------
-// index.zest.fsx - the home listing: every post, newest first.
+// index.zest.fsx - the home listing: the site's posts, five per window.
 //
-// Posts are the dated pages under /posts/; the about page, the archive, the
-// 404 page and the feeds carry no date, so they never show up here. The
-// listing is the only thing printed here; `// @layout default` wraps it in
-// the page frame, which supplies the title, the navigation and the
-// stylesheet.
+// `// @paginate 5` hands this URL to the pagination generator, which renders
+// this file once per window with `pagination` in scope: currentPage,
+// totalPages, totalItems, perPage, prevUrl, nextUrl and items. The listing
+// and the pager are the only things printed here; `// @layout default` wraps
+// each window in the page frame.
+//
+// This page is written in F#, so it composes its markup instead of including
+// the Zestucks listing component in _includes/post-list.html. The class names
+// are the same, so both render identically; the window size lives in
+// [pagination] per_page in _config.toml.
 // ---------------------------------------------------------------------------
 
 open Zest.Markup
 
-let posts =
-    sitePages ()
-    |> Array.filter (fun p -> p.date <> "" && p.url.StartsWith "/posts/")
-    |> Array.sortByDescending (fun p -> p.date)
-
 let items =
-    posts
+    pagination.items
     |> Array.map (fun post ->
         let children =
             [ timeClass "post-list__date" post.date [ text post.date ]
@@ -31,9 +32,24 @@ let items =
         liClass "post-list__item" [ fragmentLines children ])
     |> String.concat "\n"
 
+let pagerStep (label: string) (url: string) =
+    if url = "" then
+        spanClass "pager__step pager__step--disabled" [ text label ]
+    else
+        aClass "pager__step" url [ text label ]
+
+let pager =
+    elem "nav" [ attr "class" "pager"; attr "aria-label" "Pagination" ]
+        [ fragmentLines
+              [ pagerStep "Newer" pagination.prevUrl
+                spanClass "pager__status"
+                    [ text (sprintf "Page %d of %d" pagination.currentPage pagination.totalPages) ]
+                pagerStep "Older" pagination.nextUrl ] ]
+
 let body =
-    [ pClass "list-intro" [ text (siteData "site.description") ]
-      ulClass "post-list" [ items ] ]
+    [ pClass "intro" [ text (siteData "site.description") ]
+      olClass "post-list" [ items ]
+      pager ]
     |> fragmentLines
 
 printfn "%s" body

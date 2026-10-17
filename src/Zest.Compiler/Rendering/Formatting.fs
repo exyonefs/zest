@@ -247,9 +247,12 @@ module Formatting =
         // subsequent text / inline tags continue on the same line.
         let mutable pendingInline = false
 
+        // Case-insensitive: HTML is, and `<!doctype html>` is a valid spelling
+        // of the declaration. Matching only `<!DOCTYPE` used to leave the
+        // lowercase form unrecognised and drop its leading `<` from the output.
         let tagRegex = Regex(
             @"(<!--.*?-->|<!DOCTYPE[^>]*>|<\?[^?]*\?>|</?[a-zA-Z][a-zA-Z0-9\-]*[^>]*/?>|[^<]+)",
-            RegexOptions.Singleline)
+            RegexOptions.Singleline ||| RegexOptions.IgnoreCase)
 
         let matches = tagRegex.Matches(html)
         for m in matches do
@@ -267,7 +270,7 @@ module Formatting =
                 sb.Append(String.replicate depth indent) |> ignore
                 sb.Append(token) |> ignore
                 sb.AppendLine() |> ignore
-            elif token.StartsWith("<!DOCTYPE") then
+            elif token.StartsWith("<!DOCTYPE", System.StringComparison.OrdinalIgnoreCase) then
                 inlineDepth <- 0
                 pendingInline <- false
                 sb.Append(token.Trim()) |> ignore

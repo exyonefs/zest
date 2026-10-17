@@ -74,9 +74,17 @@
     <EmbeddedResource Include="Starter\_finalize.fsx" LogicalName="Zest.App.Starter._finalize.fsx" />
     <EmbeddedResource Include="Starter\README.md" LogicalName="Zest.App.Starter.README.md" />
     <EmbeddedResource Include="Starter\assets\css\style.zcss" LogicalName="Zest.App.Starter.assets\css\style.zcss" />
-    <EmbeddedResource Include="Starter\_layouts\default.zest.fsx" LogicalName="Zest.App.Starter._layouts\default.zest.fsx" />
-    <EmbeddedResource Include="Starter\_layouts\post.zest.fsx" LogicalName="Zest.App.Starter._layouts\post.zest.fsx" />
-    <EmbeddedResource Include="Starter\_layouts\shell.zest.fsx" LogicalName="Zest.App.Starter._layouts\shell.zest.fsx" />
+    <EmbeddedResource Include="Starter\_layouts\default.html" LogicalName="Zest.App.Starter._layouts\default.html" />
+    <EmbeddedResource Include="Starter\_layouts\post.html" LogicalName="Zest.App.Starter._layouts\post.html" />
+    <EmbeddedResource Include="Starter\_layouts\shell.html" LogicalName="Zest.App.Starter._layouts\shell.html" />
+    <EmbeddedResource Include="Starter\_layouts\tag.html" LogicalName="Zest.App.Starter._layouts\tag.html" />
+    <EmbeddedResource Include="Starter\_layouts\tags.html" LogicalName="Zest.App.Starter._layouts\tags.html" />
+    <EmbeddedResource Include="Starter\_layouts\category.html" LogicalName="Zest.App.Starter._layouts\category.html" />
+    <EmbeddedResource Include="Starter\_layouts\categories.html" LogicalName="Zest.App.Starter._layouts\categories.html" />
+    <EmbeddedResource Include="Starter\_includes\header.html" LogicalName="Zest.App.Starter._includes\header.html" />
+    <EmbeddedResource Include="Starter\_includes\footer.html" LogicalName="Zest.App.Starter._includes\footer.html" />
+    <EmbeddedResource Include="Starter\_includes\post-list.html" LogicalName="Zest.App.Starter._includes\post-list.html" />
+    <EmbeddedResource Include="Starter\_includes\pager.html" LogicalName="Zest.App.Starter._includes\pager.html" />
     <EmbeddedResource Include="Starter\content\index.zest.fsx" LogicalName="Zest.App.Starter.content\index.zest.fsx" />
     <EmbeddedResource Include="Starter\content\about.md" LogicalName="Zest.App.Starter.content\about.md" />
     <EmbeddedResource Include="Starter\content\archive.zest.fsx" LogicalName="Zest.App.Starter.content\archive.zest.fsx" />
@@ -85,6 +93,10 @@
     <EmbeddedResource Include="Starter\content\atom.zest.fsx" LogicalName="Zest.App.Starter.content\atom.zest.fsx" />
     <EmbeddedResource Include="Starter\content\robots.zest.fsx" LogicalName="Zest.App.Starter.content\robots.zest.fsx" />
     <EmbeddedResource Include="Starter\content\sitemap.zest.fsx" LogicalName="Zest.App.Starter.content\sitemap.zest.fsx" />
+    <EmbeddedResource Include="Starter\content\posts\2026-02-14-why-static.md" LogicalName="Zest.App.Starter.content\posts\2026-02-14-why-static.md" />
+    <EmbeddedResource Include="Starter\content\posts\2026-03-08-the-shape-of-a-url.md" LogicalName="Zest.App.Starter.content\posts\2026-03-08-the-shape-of-a-url.md" />
+    <EmbeddedResource Include="Starter\content\posts\2026-04-19-the-measure-of-a-page.md" LogicalName="Zest.App.Starter.content\posts\2026-04-19-the-measure-of-a-page.md" />
+    <EmbeddedResource Include="Starter\content\posts\2026-05-24-when-a-blog-outgrows-its-index.md" LogicalName="Zest.App.Starter.content\posts\2026-05-24-when-a-blog-outgrows-its-index.md" />
     <EmbeddedResource Include="Starter\content\posts\2026-06-30-static-by-design.md" LogicalName="Zest.App.Starter.content\posts\2026-06-30-static-by-design.md" />
     <EmbeddedResource Include="Starter\content\posts\2026-07-21-writing-in-markdown.md" LogicalName="Zest.App.Starter.content\posts\2026-07-21-writing-in-markdown.md" />
     <EmbeddedResource Include="Starter\content\posts\2026-08-02-welcome-to-zest.md" LogicalName="Zest.App.Starter.content\posts\2026-08-02-welcome-to-zest.md" />

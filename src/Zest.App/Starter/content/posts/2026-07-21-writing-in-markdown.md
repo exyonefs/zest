@@ -3,7 +3,8 @@ title = "Writing in Markdown"
 layout = "post"
 date = 2026-07-21
 description = "Headings, tables, code, quotations and lists — the palette of a post body."
-permalink = "/posts/2026-07-21-writing-in-markdown.html"
+tags = ["markdown", "writing"]
+categories = ["writing"]
 +++
 
 The body of a post is ordinary Markdown. This page is a reference for what the renderer understands, so the pieces can be copied instead of guessed.
@@ -43,13 +44,13 @@ A quotation is set apart with a rule on the left:
 Ordered lists are for genuine sequence:
 
 1. create a file under `content/posts/`
-2. give it a `title`, a `date` and a `permalink`
+2. give it a `title`, a `date`, some `tags` and a `category`
 3. run `zest build`
 
 And unordered lists for the remainder:
 
 - front matter is TOML between `+++` fences
-- layouts are `.zest.fsx`
+- layouts are `.zest.fsx`, `.html` or `.ztk`
 - styles are ZCSS, compiled to plain CSS
 
 ## Raw HTML

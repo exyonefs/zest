@@ -37,7 +37,7 @@
 
 - **F# everywhere.** Pages can be written as ordinary F# programs using a type-safe HTML DSL — loops, conditionals, functions, and data, with no template-language workarounds. Markdown remains available whenever prose is preferable to code.
 
-- **No lock-in.** Zest ships exactly one template language — **Zestucks** (`.ztk`, and `.njk` for Nunjucks files), which is syntax-compatible with Nunjucks — and one script layer, `.zest.fsx`. Output is plain, static HTML that can be hosted anywhere.
+- **No lock-in.** Zest ships exactly one template language — **Zestucks**, written in `.html` files (with `.ztk` and `.njk` accepted as alternate extensions), which is syntax-compatible with Nunjucks — and one script layer, `.zest.fsx`. Output is plain, static HTML that can be hosted anywhere.
 
 - **Quiet by default.** The bundled starter ships with no animation, no shadows, and no hover theatrics — typography and whitespace carry the page.
 
@@ -61,7 +61,7 @@
 
 - **ZCSS** — A CSS superset with nesting, F#-style `let` bindings, math expressions, color functions, and mixins — compiled to standard CSS.
 
-- **Zestucks templates** — `.ztk` files support the full Nunjucks-compatible feature set: variables, filters, `{% if %}` / `{% for %}`, template inheritance with `{% extends %}` / `{% block %}`, `{% include %}`, and macros, plus the Zest API (`site`, `page`, `pages`, `tags`, `collections`).
+- **Zestucks templates** — `.html` files (and their `.ztk` / `.njk` alternates) support the full Nunjucks-compatible feature set: variables, filters, `{% if %}` / `{% for %}`, template inheritance with `{% extends %}` / `{% block %}`, `{% include %}`, and macros, plus the Zest API (`site`, `page`, `pages`, `tags`, `collections`).
 
 - **`_prebuild.fsx`** — An optional pre-build script (run before each build) for injecting dynamic data, loading JSON/TOML, and reading environment variables.
 
@@ -207,20 +207,20 @@ Templates read it as `{{ site.socials }}`.
 
 Zest has exactly two authoring formats:
 
-| Format          | Purpose                                                             |
-|-----------------|---------------------------------------------------------------------|
-| `.ztk` / `.njk` | **Zestucks** templates — Nunjucks-compatible syntax for markup.      |
-| `.zest.fsx`     | F# scripts — data loading, logic, and complex computation.           |
+| Format                  | Purpose                                                             |
+|-------------------------|---------------------------------------------------------------------|
+| `.html` / `.ztk` / `.njk` | **Zestucks** templates — Nunjucks-compatible syntax for markup.    |
+| `.zest.fsx`             | F# scripts — data loading, logic, and complex computation.           |
 
 Zestucks is Zest's own brand for its Nunjucks-compatible engine. It speaks the
 same syntax — variables, filters, `if` / `for`, inheritance, `block`, `include`,
-and macros — so existing Nunjucks templates work unchanged. `.ztk` and `.njk`
-are the same language — same engine, same syntax: use `.ztk` for new templates,
-while `.njk` stays supported for files ported from Nunjucks.
+and macros — so existing Nunjucks templates work unchanged.
 
-Layouts and partials are `.html`, `.ztk`, or `.njk` files — an `.html` file
-is a full Zestucks template whenever it carries `{{ }}` / `{% %}` syntax, and
-an extension-less reference resolves to it first.
+`.html` is the primary extension: an `.html` file is a full Zestucks template
+whenever it carries `{{ }}` / `{% %}` syntax, and an extension-less reference
+resolves to it first. `.ztk` (Ze-stucks) and `.njk` are the backup extensions —
+same engine, same syntax — and stay supported so existing templates need no
+rename.
 
 ```html
 <!DOCTYPE html>
@@ -231,11 +231,11 @@ an extension-less reference resolves to it first.
   <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body>
-  {{ include header.ztk }}
+  {{ include header.html }}
   <main>
     {{ content | safe }}
   </main>
-  {{ include footer.ztk }}
+  {{ include footer.html }}
 </body>
 </html>
 ```
@@ -246,16 +246,16 @@ Supported Zestucks constructs include `{{ include }}`, `{{ content }}`, `{% if %
 
 The name **Zestucks** comes from the frustration that produced it: we were
 *stuck* with Nunjucks' Node-based tooling, so we rewrote the engine in F#. The
-`-ucks` ending keeps the nod to Nunjucks. `.ztk` and `.njk` are the same
-language — same engine, same syntax, no translation step — so an existing
-Nunjucks template can be dropped in as is.
+`-ucks` ending keeps the nod to Nunjucks. `.html` is the primary extension;
+`.ztk` and `.njk` are the same language — same engine, same syntax, no
+translation step — so an existing template can be dropped in as is.
 
-| Position            | `.ztk`      | `.njk`      | Meaning                        |
-|---------------------|-------------|-------------|--------------------------------|
-| `_layouts/`         | yes         | yes         | Layout, resolved by stem name. |
-| `_includes/`        | yes         | yes         | Partial referenced bare.       |
-| `content/`          | yes         | yes         | Becomes a routed page.         |
-| References to it    | yes         | yes         | Both spellings work; a bare name prefers `.html` first. |
+| Position            | `.html`     | `.ztk`      | `.njk`      | Meaning                        |
+|---------------------|-------------|-------------|-------------|--------------------------------|
+| `_layouts/`         | yes         | yes         | yes         | Layout, resolved by stem name. |
+| `_includes/`        | yes         | yes         | yes         | Partial referenced bare.       |
+| `content/`          | yes         | yes         | yes         | Becomes a routed page.         |
+| References to it    | yes         | yes         | yes         | All spellings work; a bare name prefers `.html` first. |
 
 References may omit the extension entirely: `{% include "head" %}` and
 `{% extends "base" %}` resolve against `_includes/` then `_layouts/`, trying
@@ -270,7 +270,7 @@ References may omit the extension entirely: `{% include "head" %}` and
 ├── _config.toml           # optional: site metadata and build options
 ├── _prebuild.fsx          # optional: pre-build script (global data, hooks)
 ├── _finalize.fsx          # optional: post-build script (validate, index)
-├── _layouts/              # layouts: .ztk (Zestucks) or .zest.fsx (F# DSL)
+├── _layouts/              # layouts: .html (Zestucks) or .zest.fsx (F# DSL)
 ├── _includes/             # partials pulled in with {{ include }}
 ├── _data/                 # global data (nav.toml, …)
 ├── _locales/              # i18n string tables (en.toml, …)
@@ -372,8 +372,8 @@ Zest distinguishes two kinds of F# script. Only one of them becomes a page.
 
 | File pattern   | Purpose                                                        | Processing                                          |
 |----------------|----------------------------------------------------------------|-----------------------------------------------------|
-| `*.ztk` / `*.html` | Zestucks native templates (filters, macros, inheritance, Zest API) | Rendered by the Zestucks engine                |
-| `*.njk`        | Nunjucks-compatible templates — same engine as `.ztk`            | Rendered by the Zestucks engine                     |
+| `*.html` / `*.ztk` | Zestucks native templates (filters, macros, inheritance, Zest API) | Rendered by the Zestucks engine                |
+| `*.njk`        | Nunjucks-compatible templates — same engine as `.html` / `.ztk`  | Rendered by the Zestucks engine                     |
 | `*.zest.fsx`   | **Zest Pages** — F# script templates with routing semantics      | Compiled via `dotnet fsi`, then given a URL         |
 | `*.fsx`        | Ordinary F# scripts — **Zest does not route them**               | Ignored by discovery                                |
 | `*.md`         | Standard Markdown                                                | Rendered to HTML                                    |
@@ -428,7 +428,7 @@ Three details follow from this:
   `scripts/build.zest.fsx` would publish it at `/scripts/build/`. Leave a URL
   that should not exist as a plain `.fsx`.
 
-When two files would produce the same output — `about.ztk` beside
+When two files would produce the same output — `about.html` beside
 `about.zest.fsx`, say — Zest does not arbitrate. Whichever page is written last
 wins, so give each route exactly one source file.
 

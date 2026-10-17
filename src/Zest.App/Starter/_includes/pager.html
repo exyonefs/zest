@@ -1,0 +1,15 @@
+{# Pagination component. Reads the `pagination` object the pagination
+   generator injects; a step with nowhere to go renders as a muted span. #}
+<nav class="pager" aria-label="Pagination">
+  {% if pagination.prevUrl %}
+  <a class="pager__step" href="{{ pagination.prevUrl }}">Newer</a>
+  {% else %}
+  <span class="pager__step pager__step--disabled">Newer</span>
+  {% endif %}
+  <span class="pager__status">Page {{ pagination.currentPage }} of {{ pagination.totalPages }}</span>
+  {% if pagination.nextUrl %}
+  <a class="pager__step" href="{{ pagination.nextUrl }}">Older</a>
+  {% else %}
+  <span class="pager__step pager__step--disabled">Older</span>
+  {% endif %}
+</nav>

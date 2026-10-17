@@ -1,0 +1,7 @@
+{# tags.html — the tag index at /tags/: one chip per term. #}
+<p class="intro">Every tag used on this site, one page each.</p>
+<ul class="term-list">
+{% for t in terms %}
+  <li class="term-list__item"><a href="/{{ taxonomy.plural }}/{{ t.slug }}/">{{ t.name }}</a></li>
+{% endfor %}
+</ul>

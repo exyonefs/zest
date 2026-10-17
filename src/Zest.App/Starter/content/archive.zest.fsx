@@ -1,4 +1,3 @@
-// @permalink /archive.html
 // @layout default
 // @title Archive
 // @description Every post, grouped by year.
@@ -6,13 +5,14 @@
 open Zest.Markup
 
 // sitePages() returns every content page with its front matter already parsed.
-// The feeds use the same call; dates are always "yyyy-MM-dd" strings.
+// The feeds use the same call; dates are always "yyyy-MM-dd" strings. Grouping
+// by year is the reason this page stays in F# — Zestucks has no group-by.
 let posts =
     sitePages ()
-    |> Array.filter (fun p -> p.date <> "" && p.url <> "/archive.html")
+    |> Array.filter (fun p -> p.date <> "")
     |> Array.sortByDescending (fun p -> p.date)
 
-let body =
+let sections =
     posts
     |> Array.groupBy (fun p -> p.date.Substring(0, 4))
     |> Array.sortByDescending fst
@@ -26,7 +26,7 @@ let body =
             |> String.concat "\n"
         sectionClass "archive__year"
             [ h2 [ text year ]
-              ulClass "post-list" [ list ] ])
+              olClass "post-list" [ list ] ])
     |> String.concat "\n"
 
-printfn "%s" body
+printfn "%s" (divClass "archive" [ sections ])

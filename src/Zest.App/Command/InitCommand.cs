@@ -100,7 +100,7 @@ public static class InitCommand
             Edit `content/index.md` and run `zest build` again.
             """);
 
-        Write(Path.Combine(target, "_layouts", "default.ztk"), """
+        Write(Path.Combine(target, "_layouts", "default.html"), """
             <!DOCTYPE html>
             <html lang="{{ site.language | default('en') }}">
             <head>

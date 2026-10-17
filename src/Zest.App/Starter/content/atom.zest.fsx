@@ -16,7 +16,7 @@ let language = opt "site.language"
 // Posts only — the same set the RSS feed carries; see feed.zest.fsx.
 let articles =
     sitePages ()
-    |> Array.filter (fun p -> p.date <> "" && p.url.StartsWith "/posts/")
+    |> Array.filter (fun p -> p.date <> "")
     |> Array.sortByDescending (fun p -> p.date)
     |> Array.map (fun p ->
         { url = p.url; title = p.title; date = p.date; description = p.description } : Feeds.FeedItem)

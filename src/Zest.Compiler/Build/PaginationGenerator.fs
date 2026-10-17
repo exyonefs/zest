@@ -261,7 +261,21 @@ module PaginationGenerator =
                 Title = title
                 Content = bodies |> Map.tryFind (sourcePath slugName w.PageIndex) |> Option.defaultValue ""
                 Slug = if w.PageIndex = 1 then slugName else sprintf "%s-%d" slugName w.PageIndex
-                Data = readOnlyDict [ "description", box (sprintf "%s — page %d of %d" collection w.PageIndex totalPages) ]
+                // Window 1 carries the template's own description, if it has
+                // one — the layout falls back to the site description when it
+                // does not. Later windows name themselves so a search result
+                // or share card can tell the windows apart. The collection
+                // name alone was empty for root pagination, which used to
+                // yield the description " — page 1 of 2".
+                Data =
+                    if w.PageIndex = 1 then
+                        match meta.Description with
+                        | Some d -> readOnlyDict [ "description", box d ]
+                        | None -> readOnlyDict []
+                    else
+                        let label = if isRoot then "Home" else collection
+                        readOnlyDict
+                            [ "description", box (sprintf "%s — page %d of %d" label w.PageIndex totalPages) ]
                 SourcePath = sourcePath slugName w.PageIndex })
 
     /// <summary>

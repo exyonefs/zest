@@ -1,0 +1,20 @@
+{# default.html — an ordinary page: title, optional subtitle from the page
+   description, and the body.
+
+   `default` is the engine's fallback layout, so every page that names none
+   lands here; renaming the file needs a matching `default_layout` entry in
+   _config.toml. It is also the frame the taxonomy and pagination generators
+   wrap their pages in. #}
+{% extends "shell" %}
+
+{% block content %}
+<article class="entry">
+  <header class="entry__header">
+    <h1 class="entry__title">{{ page.title | default(site.title) }}</h1>
+    {% if page.description and page.description != page.title %}
+    <p class="entry__meta">{{ page.description }}</p>
+    {% endif %}
+  </header>
+  <div class="entry__body">{{ content | safe }}</div>
+</article>
+{% endblock %}

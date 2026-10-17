@@ -1,9 +1,9 @@
 // TaxonomyGenerator.fs
 //
 // Auto-generates taxonomy archive pages (e.g. /tags/ and /tags/<term>/) so
-// that adding a tag to a post is enough — no need to hand-author a .ztk file
-// per tag. Runs after the content pipeline so PageStore already knows every
-// page and tag.
+// that adding a tag to a post is enough — no need to hand-author an .html
+// template per tag. Runs after the content pipeline so PageStore already knows
+// every page and tag.
 //
 // Content files always win: if /tags/foo/ is produced by a content file, the
 // generator skips it. Every other archive page is rewritten on each build so
@@ -23,7 +23,7 @@ open Zest.Compiler.Rendering
 module TaxonomyGenerator =
 
     /// Built-in fallback for a single term listing, used when the theme does
-    /// not ship `_layouts/<singular>.ztk`. Keeps the generator useful standalone.
+    /// not ship `_layouts/<singular>.html`. Keeps the generator useful standalone.
     let private defaultTermTemplate = """
 <div class="posts tag-posts">
   <h2>{{ term }}</h2>
@@ -40,7 +40,7 @@ module TaxonomyGenerator =
 """
 
     /// Built-in fallback for the terms index, used when the theme does not
-    /// ship `_layouts/<plural>.ztk`.
+    /// ship `_layouts/<plural>.html`.
     let private defaultIndexTemplate = """
 <div class="terms terms-index">
   <h2>{{ taxonomy.plural | capitalize }}</h2>
@@ -205,7 +205,7 @@ module TaxonomyGenerator =
                     Title = title
                     Content = inner
                     Slug = tax.Plural
-                    Data = readOnlyDict [ "description", box (sprintf "%s index" tax.Plural) ]
+                    Data = readOnlyDict [ "description", box (sprintf "%s index" title) ]
                     SourcePath = sprintf "<taxonomy:%s:index>" tax.Name }
 
     /// <summary>

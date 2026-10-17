@@ -1,0 +1,6 @@
+{# tag.html — every post carrying one tag, resolved by the taxonomy
+   generator for /tags/<term>/. The listing itself is the shared component. #}
+{% set posts = term_pages %}
+{% include "post-list.html" %}
+
+<p class="entry__nav"><a href="/tags/">All tags</a> &middot; <a href="/archive/">Archive</a> &middot; <a href="/">Home</a></p>

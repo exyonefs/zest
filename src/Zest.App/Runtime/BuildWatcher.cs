@@ -10,7 +10,7 @@ namespace Zest.App.Runtime;
 /// Relevant file extensions for content watching.
 ///
 /// Derived from the compiler's own extension registry rather than a hand-kept
-/// list: Zestucks layouts and includes (<c>.ztk</c>/<c>.njk</c>) are the files
+/// list: Zestucks layouts and includes (<c>.html</c>/<c>.ztk</c>/<c>.njk</c>) are the files
 /// an author edits most, and forgetting one here means "save has no effect"
 /// with no error to explain it.
 /// </summary>
