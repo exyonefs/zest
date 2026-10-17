@@ -1,0 +1,352 @@
+/* ---------------------------------------------------------------------------
+   style.zcss — the only stylesheet the site links.
+
+   One file, top to bottom: design tokens first, then the reset and document
+   typography, then the site chrome, the article block, the listings, and the
+   responsive / print rules. The `let` bindings at the top are the tokens every
+   rule below reads, the way the imported partials of a split sheet would.
+
+   ZCSS is a CSS superset — F#-style `let` bindings, nesting-free rule blocks
+   in square brackets — compiled to plain CSS at build time. The build writes
+   the compiled result next to this file's output as style.css, so the only
+   stylesheet the browser downloads is style.css.
+
+   Register this file in src/Zest.App/Zest.App.csproj so that `zest init`
+   copies it into new sites.
+   --------------------------------------------------------------------------- */
+
+/* -- Design tokens ---------------------------------------------------------
+   The one place colours and font stacks are written down. The font stacks are
+   system fonts only: no webfont request ever leaves the reader's machine. */
+
+let paper     = #ffffff
+let ink       = #1c1c1a
+let muted     = #6f6f68
+let link      = #0b5394
+let surface   = #f6f6f2
+let rule      = #e3e3de
+let font-sans = system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
+let font-mono = ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace
+let measure   = 40rem
+
+/* -- Reset and document typography --------------------------------------- */
+
+*, *:before, *:after [
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+]
+
+body [
+  background: paper;
+  color: ink;
+  font-family: font-sans;
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+]
+
+h1, h2, h3, h4, h5, h6 [
+  line-height: 1.25;
+  font-weight: 600;
+]
+
+h1 [ font-size: 1.75rem; ]
+h2 [ font-size: 1.375rem; ]
+h3 [ font-size: 1.125rem; ]
+
+p, ul, ol, blockquote, pre, table, figure [
+  margin-top: 1rem;
+]
+
+ul, ol [
+  padding-left: 1.5rem;
+]
+
+a [
+  color: link;
+  text-decoration: none;
+]
+
+a:hover [
+  text-decoration: underline;
+  text-underline-offset: 2px;
+]
+
+::focus-visible [
+  outline: 2px solid link;
+  outline-offset: 2px;
+]
+
+img, svg [
+  display: block;
+  max-width: 100%;
+]
+
+img [
+  height: auto;
+]
+
+blockquote [
+  background: surface;
+  padding: 0.875rem 1.125rem;
+  border-left: 3px solid rule;
+  color: muted;
+]
+
+code, pre [
+  font-family: font-mono;
+  background: surface;
+]
+
+code [
+  padding: 0.1rem 0.3rem;
+  font-size: 0.9em;
+  border-radius: 3px;
+]
+
+pre [
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border-radius: 4px;
+]
+
+pre code [
+  background: transparent;
+  padding: 0;
+]
+
+hr [
+  border-top: 1px solid rule;
+  margin-top: 2rem;
+]
+
+table [
+  width: 100%;
+  border-collapse: collapse;
+  border-bottom: 2px solid ink;
+}
+
+thead th [
+  border-bottom: 1px solid ink;
+]
+
+th, td [
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rule;
+}
+
+/* -- Site chrome -----------------------------------------------------------
+   The header, the navigation, the main column and the footer. The markup
+   these class names target is produced by _layouts/shell.zest.fsx, which is
+   the only layout that emits it. */
+
+.page [
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.site-header [
+  width: 100%;
+  max-width: measure;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid rule;
+}
+
+.site-header__inner [
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.site-header__title [
+  color: ink;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.site-header__title:hover [
+  text-decoration: none;
+}
+
+.site-nav [
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.page__main [
+  flex: 1;
+  width: 100%;
+  max-width: measure;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.site-footer [
+  width: 100%;
+  max-width: measure;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 2.5rem;
+  border-top: 1px solid rule;
+  color: muted;
+  font-size: 0.8125rem;
+}
+
+.site-footer__inner [
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.site-footer__meta [
+  margin: 0;
+}
+
+/* -- Article block ---------------------------------------------------------
+   The `article__*` elements every page body is built from: the title, the
+   meta line, the body, and the way back. Markup comes from
+   _layouts/default.zest.fsx (ordinary pages) and _layouts/post.zest.fsx
+   (dated entries). */
+
+.article__head [
+  margin-bottom: 2rem;
+}
+
+.article__title [
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.article__meta [
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: muted;
+}
+
+.article__body [
+  word-wrap: break-word;
+}
+
+.article__footer [
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rule;
+  font-size: 0.875rem;
+  color: muted;
+}
+
+/* -- Listings --------------------------------------------------------------
+   The home page entry list — date, title, excerpt, separated by rules — and
+   the archive's per-year sections. There is no pagination: the listing is
+   one page until the archive outgrows it.
+
+   Markup comes from content/index.zest.fsx and content/archive.zest.fsx. */
+
+.list-intro [
+  margin-bottom: 2rem;
+  color: muted;
+}
+
+.post-list [
+  list-style: none;
+  padding-left: 0;
+}
+
+.post-list__item [
+  padding: 1.125rem 0;
+  border-top: 1px solid rule;
+}
+
+.post-list__item:first-child [
+  border-top: 0;
+  padding-top: 0;
+}
+
+.post-list__date [
+  display: block;
+  font-size: 0.8125rem;
+  color: muted;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-list__title [
+  font-size: 1.25rem;
+  margin-top: 0.125rem;
+]
+
+.post-list__excerpt [
+  margin-top: 0.375rem;
+  font-size: 0.9375rem;
+  color: muted;
+}
+
+.archive__year [
+  margin-top: 2rem;
+}
+
+.archive__year:first-child [
+  margin-top: 0;
+}
+
+/* -- Responsive, print and motion preferences ------------------------------
+   The print rules are the quiet payoff: the chrome disappears and the page
+   prints as a clean document. */
+
+@media (max-width: 640px) [
+  .page__main [
+    padding-left: 1rem;
+    padding-right: 1rem;
+  ]
+
+  .site-header, .site-footer [
+    padding-left: 1rem;
+    padding-right: 1rem;
+  ]
+
+  table [
+    display: block;
+    overflow-x: auto;
+  ]
+]
+
+@media print [
+  .site-header, .site-footer, .article__footer [
+    display: none;
+  ]
+
+  body [
+    background: #ffffff;
+    color: #000000;
+    font-size: 12pt;
+  ]
+
+  .page__main [
+    max-width: none;
+    padding: 0;
+  ]
+
+  a [
+    color: #000000;
+    text-decoration: none;
+  ]
+]
+
+@media (prefers-reduced-motion: reduce) [
+  * [
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  ]
+]

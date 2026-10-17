@@ -4,23 +4,14 @@
 // built. It must sit at the project root under exactly this name; it is never
 // discovered in subdirectories, never routed, and never published.
 //
-// Its job is to shape what gets rendered. It has no access to the build
-// output; anything that runs after the site exists belongs in _finalize.fsx,
-// and anything declarative belongs in _config.toml.
+// Its job is to shape what gets rendered: inject values templates read, or
+// register helpers. Anything declarative belongs in _config.toml instead.
 //
-// Available helpers:
-//
-//   addGlobal key value            inject a value into global data
-//   addGlobalFunction name value   expose a value to templates
-//   addFilter name spec            register a Zestucks filter pipeline
-//   loadJson path                  parse a JSON file
-//   loadToml path                  parse a TOML file
-//   loadEnv key                    read an environment variable
-//   consoleLog message             print to stderr
-//   exec command args              run a shell command, return its result
+// Available helpers include addGlobal, addGlobalFunction, addFilter, loadJson,
+// loadToml, loadEnv, consoleLog and exec.
 
-// Expose the build year to templates as {{ site.buildYear }} — used by the
-// footer folio so a static site never shows a stale copyright year.
+// Expose the build year to templates as {{ site.buildYear }}, so the footer
+// folio never shows a stale copyright year.
 addGlobal "buildYear" (System.DateTime.UtcNow.Year)
 
 // More examples — uncomment what you need.

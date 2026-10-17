@@ -133,7 +133,6 @@ public static class ConfigLoader
             logLevel: Str(site, "log_level", config.LogLevel),
             logToFile: Bool(site, "log_to_file", config.LogToFile),
             logTimestamps: Bool(site, "log_timestamps", config.LogTimestamps),
-            zestucksCompatibility: ParseZestucksCompatibility(model, config.ZestucksCompatibility),
             include: ParseStringList(model, "include"),
             exclude: ParseStringList(model, "exclude"),
             paginationPerPage: paginationPerPage,
@@ -201,14 +200,6 @@ public static class ConfigLoader
         table is null ? fallback : TomlReader.GetBool(table, key, fallback);
 
     // ── Sections ───────────────────────────────────────────────
-
-    /// <summary>Read the Zestucks filter-set mode: [template.zestucks] compatibility.</summary>
-    private static string ParseZestucksCompatibility(TomlTable model, string fallback)
-    {
-        if (Table(model, "template") is not { } template) return fallback;
-        if (Table(template, "zestucks") is not { } zestucks) return fallback;
-        return TomlReader.GetString(zestucks, "compatibility", fallback);
-    }
 
     /// <summary>Read [[taxonomies]] entries, e.g. name = "tag", plural = "tags".</summary>
     private static FSharpList<TaxonomyConfig> ParseTaxonomies(TomlTable model, FSharpList<TaxonomyConfig> fallback)

@@ -66,13 +66,6 @@ module BuildRunner =
             FsiRunner.resetSession()
             PageEvaluator.resetZestucksCache()
 
-            // Strict mode disables Zest extension filters so only the
-            // Nunjucks-compatible filter set remains available.
-            let isStrict = config.IsStrictZestucks
-            ZestucksFilters.setStrictMode isStrict
-            if isStrict then
-                eprintfn "[Zest] Zestucks strict mode — Zest extension filters disabled."
-
             let root        = Directory.GetCurrentDirectory()
             let contentDir  = resolveContentDir root config
             let outputDir   = resolvePath root config.OutputDir

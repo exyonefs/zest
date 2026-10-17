@@ -18,20 +18,10 @@ module ZestucksFilters =
     /// a half-cleared table.
     let private prebuildFilters = ref Map.empty<string, string>
 
-    /// Whether to register Zest extension filters (pages_by_tag, recent,
-    /// by_collection, search). When `ZestucksCompatibility = "strict"`,
-    /// these are skipped so only the Nunjucks-compatible filter set
-    /// remains available. User-declared prebuild filters are always registered.
-    let private strictMode = ref false
-
     /// Set the prebuild-declared filter specs. Called once per build
     /// after _prebuild.fsx executes. Clears any previously accumulated filters.
     let setPrebuildFilters (filters: IDictionary<string, string>) =
         prebuildFilters := (filters |> Seq.map (fun kv -> kv.Key, kv.Value) |> Map.ofSeq)
-
-    /// Toggle strict Zestucks compatibility mode. When true, Zest-specific
-    /// extension filters are not registered on engine instances.
-    let setStrictMode (enabled: bool) = strictMode := enabled
 
 
     /// Read the taxonomy term-to-slug alias map injected by GlobalData. The
@@ -93,84 +83,80 @@ module ZestucksFilters =
         defaultLangRef := defaultLang
 
     /// Register all Zest-specific filters on the given template engine,
-    /// including any init-script-declared filters.
+    /// including any prebuild-declared filters.
     ///
-    /// In strict mode (setStrictMode true), the Zest extension
-    /// filters (pages_by_tag / recent / by_collection / search) are skipped
-    /// so templates behave like stock Nunjucks. Init-declared filters
-    /// are always registered because they are user-owned, not Zest builtins.
+    /// Every filter is always registered: the Nunjucks-compatible core and the
+    /// Zest extension filters (pages_by_tag / recent / by_collection / search)
+    /// share one surface — there is no mode to toggle.
     let registerAllFilters (engine: Engine) =
-        // ── Zest extension filters (skipped in strict mode) ──
-        if not !strictMode then
-            // ── pages_by_tag / by_tag: filter pages by a tag ─────
-            // `by_tag` is registered as an alias so templates ported from
-            // other SSGs (e.g. Hugo's `where`-style tag filters) work without
-            // rewriting. Both names share the same filter body.
-            let pagesByTag (value: obj) (args: string list) =
-                let tag = if args.Length > 0 then args.[0] else ""
-                let pages = PageStore.getPagesForZestucks ()
+        // ── Zest extension filters ──
+        // ── pages_by_tag / by_tag: filter pages by a tag ─────
+        // `by_tag` is registered as an alias so templates ported from
+        // other SSGs (e.g. Hugo's `where`-style tag filters) work without
+        // rewriting. Both names share the same filter body.
+        let pagesByTag (value: obj) (args: string list) =
+            let tag = if args.Length > 0 then args.[0] else ""
+            let pages = PageStore.getPagesForZestucks ()
+            pages
+            |> Array.filter (fun p ->
+                match p.TryGetValue "tags" with
+                | true, (:? (string[]) as tags) ->
+                    tags |> Array.exists (fun t -> t.Equals(tag, StringComparison.OrdinalIgnoreCase))
+                | _ -> false)
+            |> Array.map (fun d -> d :> obj) |> box
+        engine.RegisterFilter "pages_by_tag" (fun value args -> pagesByTag value args)
+        engine.RegisterFilter "by_tag"       (fun value args -> pagesByTag value args)
+
+        // ── recent: get N most recent pages ────────────────
+        engine.RegisterFilter "recent" (fun value args ->
+            let n = if args.Length > 0 then (try int args.[0] with _ -> 5) else 5
+            PageStore.getPagesForZestucks ()
+            |> Array.filter (fun p ->
+                match p.TryGetValue "date" with
+                | true, (:? string as d) -> d <> ""
+                | _ -> false)
+            |> Array.sortByDescending (fun p ->
+                match p.TryGetValue "date" with
+                | true, (:? string as d) -> d
+                | _ -> "")
+            |> Array.truncate n
+            |> Array.map (fun d -> d :> obj) |> box)
+
+        // ── by_collection: filter pages by collection name ─
+        engine.RegisterFilter "by_collection" (fun value args ->
+            let col = if args.Length > 0 then args.[0] else ""
+            // 2nd arg `exclude_index` arrives as a string ("true"/"True"/"1").
+            let excludeIndex =
+                args.Length > 1 &&
+                (match args.[1].Trim().ToLowerInvariant() with "true" | "yes" | "1" -> true | _ -> false)
+            PageStore.getPagesForZestucks ()
+            |> Array.filter (fun p ->
+                match p.TryGetValue "url" with
+                | true, (:? string as u) ->
+                    let parts = u.Trim('/').Split('/')
+                    let inCol = parts.Length > 0 && parts.[0].Equals(col, StringComparison.OrdinalIgnoreCase)
+                    let isIndex = parts.Length <= 1
+                    inCol && (not excludeIndex || not isIndex)
+                | _ -> false)
+            |> Array.map (fun d -> d :> obj) |> box)
+
+        // ── search: simple full-text search across pages ───
+        engine.RegisterFilter "search" (fun value args ->
+            let query = if args.Length > 0 then args.[0].ToLowerInvariant() else ""
+            let pages = PageStore.getPagesForZestucks ()
+            if query = "" then pages |> Array.map (fun d -> d :> obj) |> box
+            else
                 pages
                 |> Array.filter (fun p ->
-                    match p.TryGetValue "tags" with
-                    | true, (:? (string[]) as tags) ->
-                        tags |> Array.exists (fun t -> t.Equals(tag, StringComparison.OrdinalIgnoreCase))
-                    | _ -> false)
-                |> Array.map (fun d -> d :> obj) |> box
-            engine.RegisterFilter "pages_by_tag" (fun value args -> pagesByTag value args)
-            engine.RegisterFilter "by_tag"       (fun value args -> pagesByTag value args)
-
-            // ── recent: get N most recent pages ────────────────
-            engine.RegisterFilter "recent" (fun value args ->
-                let n = if args.Length > 0 then (try int args.[0] with _ -> 5) else 5
-                PageStore.getPagesForZestucks ()
-                |> Array.filter (fun p ->
-                    match p.TryGetValue "date" with
-                    | true, (:? string as d) -> d <> ""
-                    | _ -> false)
-                |> Array.sortByDescending (fun p ->
-                    match p.TryGetValue "date" with
-                    | true, (:? string as d) -> d
-                    | _ -> "")
-                |> Array.truncate n
+                    [ "title"; "content"; "excerpt"; "description" ]
+                    |> List.exists (fun key ->
+                        match p.TryGetValue key with
+                        | true, (:? string as s) ->
+                            s.ToLowerInvariant().Contains(query)
+                        | _ -> false))
                 |> Array.map (fun d -> d :> obj) |> box)
-
-            // ── by_collection: filter pages by collection name ─
-            engine.RegisterFilter "by_collection" (fun value args ->
-                let col = if args.Length > 0 then args.[0] else ""
-                // 2nd arg `exclude_index` arrives as a string ("true"/"True"/"1").
-                let excludeIndex =
-                    args.Length > 1 &&
-                    (match args.[1].Trim().ToLowerInvariant() with "true" | "yes" | "1" -> true | _ -> false)
-                PageStore.getPagesForZestucks ()
-                |> Array.filter (fun p ->
-                    match p.TryGetValue "url" with
-                    | true, (:? string as u) ->
-                        let parts = u.Trim('/').Split('/')
-                        let inCol = parts.Length > 0 && parts.[0].Equals(col, StringComparison.OrdinalIgnoreCase)
-                        let isIndex = parts.Length <= 1
-                        inCol && (not excludeIndex || not isIndex)
-                    | _ -> false)
-                |> Array.map (fun d -> d :> obj) |> box)
-
-            // ── search: simple full-text search across pages ───
-            engine.RegisterFilter "search" (fun value args ->
-                let query = if args.Length > 0 then args.[0].ToLowerInvariant() else ""
-                let pages = PageStore.getPagesForZestucks ()
-                if query = "" then pages |> Array.map (fun d -> d :> obj) |> box
-                else
-                    pages
-                    |> Array.filter (fun p ->
-                        [ "title"; "content"; "excerpt"; "description" ]
-                        |> List.exists (fun key ->
-                            match p.TryGetValue key with
-                            | true, (:? string as s) ->
-                                s.ToLowerInvariant().Contains(query)
-                            | _ -> false))
-                    |> Array.map (fun d -> d :> obj) |> box)
 
         // ── where: generic attribute filter (also available in 11ty) ──
-        // Kept available even in strict mode because 11ty users expect
-        // `where` to work.
         engine.RegisterFilter "where" (fun value args ->
             let key = if args.Length > 0 then args.[0] else ""
             let expected = if args.Length > 1 then args.[1] else ""

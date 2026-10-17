@@ -21,8 +21,12 @@ let baseUrl = (siteData "site.base_url").TrimEnd('/')
 let pageDescription =
     if page.description <> "" then page.description else site.description
 
+// The home page is titled with the site name alone: without a title of its
+// own the engine falls back to the slug, and "index" is an implementation
+// detail, not a heading.
 let documentTitle =
-    if page.title = "" then siteTitle else page.title + " | " + siteTitle
+    if page.title = "" || page.url = "/" then siteTitle
+    else page.title + " | " + siteTitle
 
 /// Make a site-relative URL absolute; canonical links and og:url must not be
 /// relative. URLs that are already absolute pass through untouched.
@@ -64,6 +68,10 @@ let headMarkup =
         [ yield! metaTags documentTitle pageDescription (absoluteUrl page.url) "" siteTitle
           yield openGraphHtml seoPage
 
+          // A 404 page is an error, not content: keep it out of the index.
+          if page.url = "/404.html" then
+              yield """<meta name="robots" content="noindex" />"""
+
           if twitterHandle <> "" then
               let handle = if twitterHandle.StartsWith "@" then twitterHandle else "@" + twitterHandle
 
@@ -71,9 +79,9 @@ let headMarkup =
                   String.concat "\n"
                       (twitterCardTags "summary_large_image" documentTitle pageDescription "" handle)
 
-          yield feedLink "application/rss+xml" "/rss.xml"
+          yield feedLink "application/rss+xml" "/feed.xml"
           yield feedLink "application/atom+xml" "/atom.xml"
-          yield link "stylesheet" "/assets/css/main.css" ]
+          yield link "stylesheet" "/assets/css/style.css" ]
 
     elem "head" [] [ fragmentLines tags ]
 
@@ -81,10 +89,9 @@ let headMarkup =
 
 let navItems =
     [ "/", "Home"
-      "/archive/", "Archive"
-      "/tags/", "Tags"
-      "/about/", "About"
-      "/rss.xml", "RSS" ]
+      "/archive.html", "Archive"
+      "/about.html", "About"
+      "/feed.xml", "RSS" ]
 
 let navMarkup =
     elem "nav" [ attr "class" "site-nav"; attr "aria-label" "Main" ]
@@ -106,13 +113,12 @@ let footerMarkup =
         elem "p" [ attr "class" "site-footer__meta" ]
             [ raw "&copy; "; text (buildYear + " " + siteAuthor) ]
 
-    let credit =
+    let feed =
         elem "p" [ attr "class" "site-footer__meta" ]
-            [ raw "Compiled with "
-              elem "a" [ attr "href" "https://github.com/zest-ssg/zest" ] [ text "Zest" ] ]
+            [ elem "a" [ attr "href" "/feed.xml" ] [ text "RSS" ] ]
 
     elem "footer" [ attr "class" "site-footer" ]
-        [ divClass "site-footer__inner" [ fragmentLines [ copyright; credit ] ] ]
+        [ divClass "site-footer__inner" [ fragmentLines [ copyright; feed ] ] ]
 
 // -- Document ---------------------------------------------------------------
 

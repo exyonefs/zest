@@ -2,77 +2,100 @@
 
 The site produced by `zest init`.
 
+A flat, minimal blog: every page is one static HTML file, every URL is that
+file's path, and nothing runs in the browser. No JavaScript, no webfonts, no
+analytics, no third-party requests.
+
 ## Layout
 
 ```
 .
-├── _config.toml              # optional: site metadata and build options
-├── _prebuild.fsx             # optional: pre-build script (global data, hooks)
-├── _finalize.fsx             # optional: post-build script (validate, index)
-├── _layouts/                 # layouts: .zest.fsx (F#) and .ztk (Zestucks)
+├── _config.toml              # optional: site metadata
+├── _prebuild.fsx             # optional: pre-build script (global data)
+├── _finalize.fsx             # optional: post-build script (shape output)
+├── _layouts/                 # layouts: .zest.fsx (F#)
 │   ├── shell.zest.fsx        # the document: <html>, <head>, header, footer
 │   ├── default.zest.fsx      # an ordinary page; the engine's fallback layout
-│   ├── post.zest.fsx         # a dated entry: author, date, body, tags
-│   ├── tag.ztk               # one tag's listing, looked up before taxonomy.ztk
-│   └── tags.ztk              # index of every tag, looked up before terms.ztk
-├── assets/css/main.zcss      # the stylesheet the pages link
-├── assets/css/_*.zcss        # partials, inlined by main.zcss through @use
-│   ├── _tokens.zcss          # design tokens: colours, font stacks, measure
-│   ├── _typography.zcss      # reset, headings, links, media, quotes, code
-│   ├── _site-chrome.zcss     # header, navigation, main column, footer
-│   ├── _article.zcss         # the paper__* block every page body is built from
-│   ├── _content-blocks.zcss  # theorem, equation, figure, footnotes
-│   ├── _listings.zcss        # home listing, pagination, tag index, archive
-│   ├── _buttons.zcss         # buttons and controls
-│   └── _responsive.zcss      # responsive, print and motion preferences
-├── content/                  # pages (.md, .zest.fsx, .ztk)
-└── _site/                    # build output
+│   └── post.zest.fsx         # a dated entry: title, date, body, back link
+├── assets/css/style.zcss     # the stylesheet the pages link, in one file
+└── content/                  # pages (.md, .zest.fsx)
+    ├── index.zest.fsx        # the home listing
+    ├── about.md              # → /about.html
+    ├── archive.zest.fsx      # → /archive.html, every post by year
+    ├── 404.md                # → /404.html
+    ├── feed.zest.fsx         # → /feed.xml (RSS 2.0)
+    ├── atom.zest.fsx         # → /atom.xml (Atom 1.0)
+    ├── robots.zest.fsx       # → /robots.txt
+    ├── sitemap.zest.fsx      # → /sitemap.xml
+    └── posts/                # one Markdown file per post
 ```
 
 `_config.toml`, `_prebuild.fsx` and `_finalize.fsx` are the only three special
 files Zest recognises, and all live at the project root. Everything else is
-convention.
+convention: delete `_config.toml` and the site still builds.
 
-Every directory is optional. Delete `_config.toml` and the site still builds —
-the title falls back to "My Zest Site" and content is read from `content/`
-when it exists, otherwise from the project root.
+## The built site
 
-## Three names the engine reads
+`zest build` writes the flat site into `_site/`:
 
-These are looked up by name rather than chosen by you, so they cannot be
-renamed freely:
+```text
+_site/
+├── index.html
+├── about.html
+├── archive.html
+├── 404.html
+├── assets/css/style.css
+├── feed.xml
+├── atom.xml
+├── sitemap.xml
+├── robots.txt
+└── posts/
+    └── 2026-08-02-welcome-to-zest.html
+```
 
-- `_layouts/default.zest.fsx` — `default` is the layout every page that
-  declares none falls back to. Renaming it needs a matching `default_layout`
-  entry in `_config.toml`, or an unconfigured page renders unwrapped.
-- `_layouts/tag.ztk` and `_layouts/tags.ztk` — the taxonomy generator resolves
-  them by taxonomy name: `tag` before `taxonomy`, `tags` before `terms`. A
-  `category` taxonomy has no template here and falls back to the engine's
-  built-in one; copy these two to `category.ztk` / `categories.ztk` to style it.
-- An underscore in front of a `.zcss` file means partial: the build inlines it
-  into the sheet that `@use`s it and never publishes one of its own, which is
-  why `_site/assets/css/` holds `main.css` and nothing else.
+Every URL is a file path: the home page is `/`, the about page is
+`/about.html`, and a post is `/posts/<file-name>.html`. A `permalink` in the
+front matter sets that path explicitly.
 
-## How it works
+The stylesheet is ZCSS — a CSS superset with `let` bindings — compiled to
+plain CSS at build time. One file in, one file out: the browser downloads
+`style.css` and nothing else.
 
-- Posts are Markdown with `+++` TOML front matter; `content/index.zest.fsx`
-  renders the paginated home page, eight posts per window. `// @paginate 8`
-  hands the page to the pagination generator, which re-runs it once per window
-  with `pagination` in scope — currentPage, totalPages, totalItems, perPage,
-  prevUrl, nextUrl and items.
-- Layouts are `.zest.fsx` templates — real F# evaluated by FSI with `content`,
-  `page` and `site` in scope — and are composed through the same DSL as the
-  rest of the engine. `default.zest.fsx` renders an ordinary page,
-  `post.zest.fsx` adds the metadata only a dated entry has, and
-  `shell.zest.fsx` wraps either one in the `<html>` document. A layout chooses
-  its parent with a `// @layout name` first line.
-- `main.zcss` is ZCSS, a CSS superset compiled to plain CSS at build time. It
-  is an index: each `@use` inlines a partial, in cascade order. Partials are
-  the underscore-prefixed `.zcss` files beside it, and the build never publishes
-  one on its own — `_tokens.css` is not written, only `main.css` is.
-- The feeds and sitemap are `.zest.fsx` pages built with `Zest.Markup.Feeds`.
-- `_prebuild.fsx` runs before every build to inject dynamic data. It ships
-  commented out; uncomment an example to see it take effect.
+## Writing a post
+
+Create `content/posts/2026-10-17-hello.md`:
+
+```toml
++++
+title = "Hello"
+layout = "post"
+date = 2026-10-17
+description = "One line for the listing and the feeds."
+permalink = "/posts/2026-10-17-hello.html"
++++
+
+The body is Markdown. Raw HTML passes through untouched.
+```
+
+That is the whole workflow. The home listing, the archive, both feeds and the
+sitemap are generated from the front matter at build time, so a new post never
+means editing another file.
+
+## Publishing
+
+```bash
+zest build          # static output into _site/
+```
+
+Copy `_site/` to any static host, or push the repository to one that builds
+from source. Git is the backup: the sources are plain text, and the build is
+reproducible from them alone.
+
+## What is not here
+
+Comments, search, tags, pagination, an admin screen, analytics, external
+fonts — none of them ship, and none of them is needed to start. The design
+post that ships with the template explains each omission.
 
 ## Workflow
 

@@ -1,37 +1,28 @@
-// @paginate 8
 // @layout default
 
 // ---------------------------------------------------------------------------
-// index.zest.fsx - the home listing: the site's posts, eight per window.
+// index.zest.fsx - the home listing: every post, newest first.
 //
-// `// @paginate 8` hands this URL to the pagination generator, which renders
-// this file once per window with `pagination` in scope: currentPage,
-// totalPages, totalItems, perPage, prevUrl, nextUrl and items — the same
-// fields a Zestucks listing reads off its own `pagination` object. The listing
-// is the only thing printed here; `// @layout default` wraps each window in
-// the paper page, which supplies the title, the navigation and the frame.
+// Posts are the dated pages under /posts/; the about page, the archive, the
+// 404 page and the feeds carry no date, so they never show up here. The
+// listing is the only thing printed here; `// @layout default` wraps it in
+// the page frame, which supplies the title, the navigation and the
+// stylesheet.
 // ---------------------------------------------------------------------------
 
 open Zest.Markup
 
-let data = Context.get().SiteData
-let siteDescription = if data.ContainsKey "site.description" then data.["site.description"].ToString() else ""
+let posts =
+    sitePages ()
+    |> Array.filter (fun p -> p.date <> "" && p.url.StartsWith "/posts/")
+    |> Array.sortByDescending (fun p -> p.date)
 
-// `pagination.items` carries the same fields as sitePages(): url, title, date,
-// slug, description, tags, author and category. Dates are "yyyy-MM-dd" strings.
 let items =
-    pagination.items
+    posts
     |> Array.map (fun post ->
         let children =
-            [ h2Class "post-list__title" [ aHref post.url post.title ]
-              // Inline children are passed straight to the element, so the meta
-              // line keeps its spacing exact.
-              pClass "post-list__meta"
-                  [ if post.date <> "" then
-                        text (Dates.formatDateCustom post.date "MMMM d, yyyy")
-                    if post.tags.Length > 0 then
-                        raw " &middot; "
-                        text (post.tags |> String.concat ", ") ] ]
+            [ timeClass "post-list__date" post.date [ text post.date ]
+              h2Class "post-list__title" [ aHref post.url post.title ] ]
             @ (if post.description = "" then
                    []
                else
@@ -40,21 +31,9 @@ let items =
         liClass "post-list__item" [ fragmentLines children ])
     |> String.concat "\n"
 
-let paginationStep (label: string) (url: string) =
-    if url = "" then
-        spanClass "pagination__step pagination__step--off" [ text label ]
-    else
-        aClass "pagination__step" url [ text label ]
-
 let body =
-    [ pClass "list-intro" [ text siteDescription ]
-      olClass "post-list" [ items ]
-      elem "nav" [ attr "class" "pagination"; attr "aria-label" "Pagination" ]
-          [ fragmentLines
-                [ paginationStep "Previous" pagination.prevUrl
-                  spanClass "pagination__folio"
-                      [ text (sprintf "Page %d of %d" pagination.currentPage pagination.totalPages) ]
-                  paginationStep "Next" pagination.nextUrl ] ] ]
+    [ pClass "list-intro" [ text (siteData "site.description") ]
+      ulClass "post-list" [ items ] ]
     |> fragmentLines
 
 printfn "%s" body

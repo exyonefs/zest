@@ -69,24 +69,6 @@ module LogLevel =
         | "off"   -> Some LogLevel.Off
         | _       -> None
 
-/// Zestucks filter-set mode. The engine is the same either way; only the
-/// filter/macro surface differs.
-[<RequireQualifiedAccess>]
-type ZestucksMode =
-    /// Match Nunjucks exactly; Zest's extended filters are unavailable.
-    | Strict
-    /// Nunjucks-compatible core plus Zest's extended filters/macros.
-    | Zest
-
-module ZestucksMode =
-    let names = [ "strict"; "zest" ]
-
-    let tryParse (text: string) =
-        match (if isNull text then "" else text.Trim().ToLowerInvariant()) with
-        | "strict" -> Some ZestucksMode.Strict
-        | "zest"   -> Some ZestucksMode.Zest
-        | _        -> None
-
 /// <summary>
 /// Site configuration loaded from _config.toml, or defaults when the file is
 /// absent. Two tables are recognised: [site] and [build].
@@ -126,10 +108,6 @@ type SiteConfig = {
     // Author / social (surfaced from _data but can be inlined in _config)
     Author: string
     Language: string
-    // ── Zestucks compatibility mode ──
-    /// "strict" = match Nunjucks exactly; "zest" = Zest extensions enabled.
-    /// Zest renders with Zestucks either way; only the filter set differs.
-    ZestucksCompatibility: string
     // ── File inclusion / exclusion ──
     /// Glob patterns for files to explicitly include (even if excluded by
     /// the default _-prefix / .-prefix rules). Example: [".domains", "tools/*"]
@@ -165,13 +143,6 @@ with
     /// Parsed console log verbosity, or None when `LogLevel` is misspelled.
     member this.ParsedLogLevel : LogLevel option = LogLevel.tryParse this.LogLevel
 
-    /// Parsed Zestucks filter-set mode, or None when misspelled.
-    member this.ParsedZestucksMode : ZestucksMode option = ZestucksMode.tryParse this.ZestucksCompatibility
-
-    /// True only when `ZestucksCompatibility` is exactly "strict" (or any
-    /// spelling resolving to Strict). Unrecognised values fall back to Zest.
-    member this.IsStrictZestucks = this.ParsedZestucksMode = Some ZestucksMode.Strict
-
 module SiteConfigDefaults =
     let create () =
         { Title = "My Zest Site"
@@ -196,9 +167,6 @@ module SiteConfigDefaults =
           Menus = dict []
           Author = ""
           Language = "en"
-          // "zest" mode enables Zest's extended filters/macros on top of the
-          // Nunjucks-compatible core.
-          ZestucksCompatibility = "zest"
           // Include / exclude — empty by default
           Include = []
           Exclude = []
@@ -228,9 +196,6 @@ module SiteConfigValidation =
           if config.ParsedLogLevel.IsNone then
               yield sprintf "Config key [site] log_level '%s' is not one of: %s"
                         config.LogLevel (String.concat ", " LogLevel.names)
-          if config.ParsedZestucksMode.IsNone then
-              yield sprintf "Config key [template.zestucks] compatibility '%s' is not one of: %s"
-                        config.ZestucksCompatibility (String.concat ", " ZestucksMode.names)
           // Numeric ranges the record itself cannot express.
           if not (isPort config.DevServerPort) then
               yield sprintf "Config key [site] dev_server_port must be between 1 and 65535 (got %d)" config.DevServerPort

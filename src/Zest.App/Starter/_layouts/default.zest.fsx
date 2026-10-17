@@ -1,7 +1,7 @@
 // @layout shell
 
 // ---------------------------------------------------------------------------
-// default.zest.fsx - a paper page: a centred title, an optional subtitle taken
+// default.zest.fsx - an ordinary page: the title, an optional subtitle taken
 // from the page description, and the body.
 //
 // The name is not free: `default` is the layout the engine falls back to for
@@ -10,20 +10,22 @@
 // below to shell.zest.fsx, which wraps it in the <html> document.
 // ---------------------------------------------------------------------------
 
-let paperTitle = if page.title = "" then site.title else page.title
+// The home page carries the site title; every other page its own.
+let articleTitle =
+    if page.title = "" || page.url = "/" then site.title else page.title
 
-let paperHead =
+let articleHead =
     let children =
-        [ h1Class "paper__title" [ text paperTitle ] ]
+        [ h1Class "article__title" [ text articleTitle ] ]
         @ (if page.description = "" then
                []
            else
-               [ pClass "paper__subtitle" [ text page.description ] ])
+               [ pClass "article__meta" [ text page.description ] ])
 
-    headerClass "paper__head" [ fragmentLines children ]
+    headerClass "article__head" [ fragmentLines children ]
 
-let paperBody = divClass "paper__body" [ raw content ]
+let articleBody = divClass "article__body" [ raw content ]
 
 printfn
     "%s"
-    (articleClass "paper" [ fragmentLines [ paperHead; paperBody ] ])
+    (articleClass "article" [ fragmentLines [ articleHead; articleBody ] ])

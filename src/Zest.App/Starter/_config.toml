@@ -1,16 +1,12 @@
 # Zest site configuration.
 #
-# [site]       → metadata surfaced to templates as `site.*`
-# [pagination] → how many entries each listing page shows
+# [site] → metadata surfaced to templates as `site.*`
 #
 # Everything here is optional: delete this file and the site still builds.
 
 [site]
-title = "The Zest Papers"
-description = "A LaTeX-flavoured blog: numbered sections, theorem environments, booktabs tables and hyperref-blue links."
+title = "My Zest Blog"
+description = "A flat, minimal static blog: one HTML file per page, one stylesheet, no runtime dependencies."
 url = "https://example.com"
 author = "Zest User"
 language = "en"
-
-[pagination]
-per_page = 8

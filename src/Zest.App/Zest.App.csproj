@@ -73,29 +73,21 @@
     <EmbeddedResource Include="Starter\_prebuild.fsx" LogicalName="Zest.App.Starter._prebuild.fsx" />
     <EmbeddedResource Include="Starter\_finalize.fsx" LogicalName="Zest.App.Starter._finalize.fsx" />
     <EmbeddedResource Include="Starter\README.md" LogicalName="Zest.App.Starter.README.md" />
-    <EmbeddedResource Include="Starter\assets\css\main.zcss" LogicalName="Zest.App.Starter.assets\css\main.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_article.zcss" LogicalName="Zest.App.Starter.assets\css\_article.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_buttons.zcss" LogicalName="Zest.App.Starter.assets\css\_buttons.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_content-blocks.zcss" LogicalName="Zest.App.Starter.assets\css\_content-blocks.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_listings.zcss" LogicalName="Zest.App.Starter.assets\css\_listings.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_responsive.zcss" LogicalName="Zest.App.Starter.assets\css\_responsive.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_site-chrome.zcss" LogicalName="Zest.App.Starter.assets\css\_site-chrome.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_tokens.zcss" LogicalName="Zest.App.Starter.assets\css\_tokens.zcss" />
-    <EmbeddedResource Include="Starter\assets\css\_typography.zcss" LogicalName="Zest.App.Starter.assets\css\_typography.zcss" />
+    <EmbeddedResource Include="Starter\assets\css\style.zcss" LogicalName="Zest.App.Starter.assets\css\style.zcss" />
     <EmbeddedResource Include="Starter\_layouts\default.zest.fsx" LogicalName="Zest.App.Starter._layouts\default.zest.fsx" />
     <EmbeddedResource Include="Starter\_layouts\post.zest.fsx" LogicalName="Zest.App.Starter._layouts\post.zest.fsx" />
     <EmbeddedResource Include="Starter\_layouts\shell.zest.fsx" LogicalName="Zest.App.Starter._layouts\shell.zest.fsx" />
-    <EmbeddedResource Include="Starter\_layouts\tag.ztk" LogicalName="Zest.App.Starter._layouts\tag.ztk" />
-    <EmbeddedResource Include="Starter\_layouts\tags.ztk" LogicalName="Zest.App.Starter._layouts\tags.ztk" />
     <EmbeddedResource Include="Starter\content\index.zest.fsx" LogicalName="Zest.App.Starter.content\index.zest.fsx" />
-    <EmbeddedResource Include="Starter\content\archive.zest.fsx" LogicalName="Zest.App.Starter.content\archive.zest.fsx" />
     <EmbeddedResource Include="Starter\content\about.md" LogicalName="Zest.App.Starter.content\about.md" />
-    <EmbeddedResource Include="Starter\content\rss.zest.fsx" LogicalName="Zest.App.Starter.content\rss.zest.fsx" />
+    <EmbeddedResource Include="Starter\content\archive.zest.fsx" LogicalName="Zest.App.Starter.content\archive.zest.fsx" />
+    <EmbeddedResource Include="Starter\content\404.md" LogicalName="Zest.App.Starter.content\404.md" />
+    <EmbeddedResource Include="Starter\content\feed.zest.fsx" LogicalName="Zest.App.Starter.content\feed.zest.fsx" />
     <EmbeddedResource Include="Starter\content\atom.zest.fsx" LogicalName="Zest.App.Starter.content\atom.zest.fsx" />
+    <EmbeddedResource Include="Starter\content\robots.zest.fsx" LogicalName="Zest.App.Starter.content\robots.zest.fsx" />
     <EmbeddedResource Include="Starter\content\sitemap.zest.fsx" LogicalName="Zest.App.Starter.content\sitemap.zest.fsx" />
-    <EmbeddedResource Include="Starter\content\posts\why-zest.md" LogicalName="Zest.App.Starter.content\posts\why-zest.md" />
-    <EmbeddedResource Include="Starter\content\posts\writing-in-markdown.md" LogicalName="Zest.App.Starter.content\posts\writing-in-markdown.md" />
-    <EmbeddedResource Include="Starter\content\posts\theorem-environments.md" LogicalName="Zest.App.Starter.content\posts\theorem-environments.md" />
+    <EmbeddedResource Include="Starter\content\posts\2026-06-30-static-by-design.md" LogicalName="Zest.App.Starter.content\posts\2026-06-30-static-by-design.md" />
+    <EmbeddedResource Include="Starter\content\posts\2026-07-21-writing-in-markdown.md" LogicalName="Zest.App.Starter.content\posts\2026-07-21-writing-in-markdown.md" />
+    <EmbeddedResource Include="Starter\content\posts\2026-08-02-welcome-to-zest.md" LogicalName="Zest.App.Starter.content\posts\2026-08-02-welcome-to-zest.md" />
   </ItemGroup>
 
   <!-- Package icon + README at the nupkg root (NuGet metadata convention). -->

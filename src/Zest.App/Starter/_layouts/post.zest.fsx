@@ -1,61 +1,37 @@
 // @layout shell
 
 // ---------------------------------------------------------------------------
-// post.zest.fsx - an article: title, author, date, body, and a footer carrying
-// the tag list and the way back to the archive.
+// post.zest.fsx - a dated entry: title, date, body, and the way back to the
+// archive.
 //
-// The paper page with metadata that only a dated entry has; `// @layout shell`
-// supplies the document around it.
+// The ordinary page with the metadata only a dated entry has; `// @layout
+// shell` supplies the document around it. The date is a real <time> element,
+// so machines read it as well as people.
 // ---------------------------------------------------------------------------
 
-let paperTitle = if page.title = "" then site.title else page.title
+let articleTitle = if page.title = "" then site.title else page.title
 
-let paperAuthor =
-    if page.author <> "" then page.author
-    elif site.author <> "" then site.author
-    else site.title
-
-let paperHead =
+let articleHead =
     let children =
-        [ h1Class "paper__title" [ text paperTitle ]
-          pClass "paper__author" [ text paperAuthor ] ]
+        [ h1Class "article__title" [ text articleTitle ] ]
         @ (if page.date = "" then
                []
            else
-               [ pClass "paper__date"
-                     [ text (Dates.formatDateCustom page.date "MMMM d, yyyy") ] ])
+               [ timeClass "article__meta" page.date [ text page.date ] ])
 
-    headerClass "paper__head" [ fragmentLines children ]
+    headerClass "article__head" [ fragmentLines children ]
 
-let tagsMarkup =
-    if page.tags.Length = 0 then
-        ""
-    else
-        let links =
-            page.tags
-            |> Array.map (fun tag ->
-                elem "a" [ attr "href" ("/tags/" + tag.ToLowerInvariant() + "/") ] [ text tag ])
-            |> String.concat ""
-
-        let children =
-            [ elem "span" [ attr "class" "paper__tags-label" ] [ text "Tags" ]
-              links ]
-
-        pClass "paper__tags" [ fragmentLines children ]
-
-let paperFooter =
+let articleFooter =
     let back =
-        elem "p" [ attr "class" "paper__nav" ]
-            [ elem "a" [ attr "href" "/archive/" ] [ text "All posts" ]
-              raw " &middot; "
-              elem "a" [ attr "href" "/" ] [ text "Home" ] ]
+        elem "p" [ attr "class" "article__back" ]
+            [ elem "a" [ attr "href" "/archive.html" ] [ text "All posts" ] ]
 
-    elem "footer" [ attr "class" "paper__footer" ] [ fragmentLines [ tagsMarkup; back ] ]
+    footerClass "article__footer" [ fragmentLines [ back ] ]
 
 printfn
     "%s"
-    (articleClass "paper"
+    (articleClass "article"
         [ fragmentLines
-              [ paperHead
-                divClass "paper__body" [ raw content ]
-                paperFooter ] ])
+              [ articleHead
+                divClass "article__body" [ raw content ]
+                articleFooter ] ])

@@ -1,4 +1,4 @@
-// @permalink /archive/
+// @permalink /archive.html
 // @layout default
 // @title Archive
 // @description Every post, grouped by year.
@@ -6,10 +6,10 @@
 open Zest.Markup
 
 // sitePages() returns every content page with its front matter already parsed.
-// The feed templates use the same call; dates are always "yyyy-MM-dd" strings.
+// The feeds use the same call; dates are always "yyyy-MM-dd" strings.
 let posts =
     sitePages ()
-    |> Array.filter (fun p -> p.date <> "" && p.url <> "/archive/")
+    |> Array.filter (fun p -> p.date <> "" && p.url <> "/archive.html")
     |> Array.sortByDescending (fun p -> p.date)
 
 let body =
@@ -20,17 +20,13 @@ let body =
         let list =
             items
             |> Array.map (fun p ->
-                Dsl.elem "li" [ Dsl.attr "class" "post-list__item" ] [
-                    Dsl.elem "h3" [ Dsl.attr "class" "post-list__title" ] [
-                        Dsl.elem "a" [ Dsl.attr "href" p.url ] [ Dsl.text p.title ]
-                    ]
-                    Dsl.elem "p" [ Dsl.attr "class" "post-list__meta" ] [ Dsl.text p.date ]
-                ])
+                liClass "post-list__item"
+                    [ timeClass "post-list__date" p.date [ text p.date ]
+                      h3Class "post-list__title" [ aHref p.url p.title ] ])
             |> String.concat "\n"
-        Dsl.elem "section" [ Dsl.attr "class" "archive__year" ] [
-            Dsl.elem "h2" [] [ Dsl.text year ]
-            Dsl.elem "ol" [ Dsl.attr "class" "post-list" ] [ list ]
-        ])
+        sectionClass "archive__year"
+            [ h2 [ text year ]
+              ulClass "post-list" [ list ] ])
     |> String.concat "\n"
 
 printfn "%s" body

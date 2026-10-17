@@ -49,9 +49,9 @@ module EngineHost =
 
     /// Candidate paths for one include/extends reference, most specific first.
     /// The reference as written always wins, so an explicit path never changes
-    /// meaning; an extension-less reference then gets each Zestucks file
-    /// extension appended, which is what lets a bare "base" resolve to either
-    /// `base.ztk` or `base.njk`.
+    /// meaning; an extension-less reference then gets each Zestucks family
+    /// extension appended — `.html` before `.ztk` before `.njk` — which is
+    /// what lets a bare "base" find `base.html`, `base.ztk`, or `base.njk`.
     let private candidatePaths (path: string) : string seq =
         let fileName = Path.GetFileName path
         let hasKnownExt =

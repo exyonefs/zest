@@ -218,8 +218,9 @@ and macros — so existing Nunjucks templates work unchanged. `.ztk` and `.njk`
 are the same language — same engine, same syntax: use `.ztk` for new templates,
 while `.njk` stays supported for files ported from Nunjucks.
 
-Layouts and partials are `.ztk` or `.njk` files (plain HTML works too: `.html`
-files are run through Zestucks when they contain `{{ }}` / `{% %}` syntax).
+Layouts and partials are `.html`, `.ztk`, or `.njk` files — an `.html` file
+is a full Zestucks template whenever it carries `{{ }}` / `{% %}` syntax, and
+an extension-less reference resolves to it first.
 
 ```html
 <!DOCTYPE html>
@@ -254,11 +255,11 @@ Nunjucks template can be dropped in as is.
 | `_layouts/`         | yes         | yes         | Layout, resolved by stem name. |
 | `_includes/`        | yes         | yes         | Partial referenced bare.       |
 | `content/`          | yes         | yes         | Becomes a routed page.         |
-| References to it    | `layout.ztk`| `layout.njk`| Both spellings work.           |
+| References to it    | yes         | yes         | Both spellings work; a bare name prefers `.html` first. |
 
 References may omit the extension entirely: `{% include "head" %}` and
 `{% extends "base" %}` resolve against `_includes/` then `_layouts/`, trying
-`.ztk` before `.njk`. When both exist, `.ztk` wins.
+`.html` before `.ztk` before `.njk`. When both exist, `.html` wins.
 
 ---
 
@@ -297,8 +298,7 @@ configured here. It is post-build work done in `_finalize.fsx`, where the
 author chooses exactly what to apply; see [Build Hooks](#build-hooks).
 
 Anything not listed — `[[taxonomies]]`, `[menu.*]`, `[[defaults]]`,
-`[pagination]`, `[params]`, `include`, `exclude`,
-`[template.zestucks] compatibility` — is read at the top level.
+`[pagination]`, `[params]`, `include`, `exclude` — is read at the top level.
 
 ---
 
@@ -463,16 +463,6 @@ routing depends only on the file extension:
 This table describes `_layouts/` only. Layout files have no route, so a plain
 `.fsx` layout is fine — inside the content directory it would not be a page at
 all (see *File Types*).
-
-### Zestucks Compatibility Mode
-
-`[template.zestucks] compatibility` in `_config.toml` controls how strictly
-Zestucks mirrors Nunjucks:
-
-| Value     | Meaning                                                        |
-|-----------|----------------------------------------------------------------|
-| `zest`    | Default. Zest extension filters (`pages_by_tag`, `recent`, `by_collection`, `search`) are available. |
-| `strict`  | Only the Nunjucks-compatible filter set is registered.          |
 
 ### HTML DSL Reference
 

@@ -11,7 +11,7 @@ module Feeds =
 
     /// A single feed entry (RSS/Atom). Named record — unlike anonymous
     /// records, named types unify across assembly boundaries, so FSI page
-    /// scripts can construct these and call rssXml / atomXml directly.
+    /// scripts can construct these and call rssXml / rssXmlAt / atomXml directly.
     type FeedItem = {
         url: string
         title: string
@@ -40,10 +40,12 @@ module Feeds =
     let private rfc822 (d: DateTime) =
         d.ToString("ddd, dd MMM yyyy HH:mm:ss 'GMT'", Globalization.CultureInfo.InvariantCulture)
 
-    /// Generate an RSS 2.0 feed XML string from a list of pages.
-    let rssXml (siteTitle: string) (siteUrl: string) (siteDescription: string) (pages: FeedItem[]) =
+    /// Generate an RSS 2.0 feed whose <atom:link rel="self"> points at
+    /// `feedPath` (e.g. "/feed.xml"), for a feed not served at /rss.xml.
+    let rssXmlAt (feedPath: string) (siteTitle: string) (siteUrl: string) (siteDescription: string) (pages: FeedItem[]) =
         // Normalize once so joining with absolute paths cannot produce "//".
         let siteUrl = siteUrl.TrimEnd('/')
+        let feedPath = if feedPath.StartsWith "/" then feedPath else "/" + feedPath
         let sb = StringBuilder()
         sb.AppendLine("""<?xml version="1.0" encoding="utf-8"?>""") |> ignore
         sb.AppendLine("""<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">""") |> ignore
@@ -51,7 +53,7 @@ module Feeds =
         sb.AppendFormat("    <title>{0}</title>\n", xe siteTitle) |> ignore
         sb.AppendFormat("    <link>{0}</link>\n", xe siteUrl) |> ignore
         sb.AppendFormat("    <description>{0}</description>\n", xe siteDescription) |> ignore
-        sb.AppendFormat("    <atom:link href=\"{0}/rss.xml\" rel=\"self\" type=\"application/rss+xml\" />\n", xe siteUrl) |> ignore
+        sb.AppendFormat("    <atom:link href=\"{0}{1}\" rel=\"self\" type=\"application/rss+xml\" />\n", xe siteUrl, xe feedPath) |> ignore
         sb.AppendLine("    <language>en</language>") |> ignore
         sb.AppendFormat("    <lastBuildDate>{0}</lastBuildDate>\n", rfc822 DateTime.UtcNow) |> ignore
         for page in pages do
@@ -73,6 +75,11 @@ module Feeds =
         sb.AppendLine("  </channel>") |> ignore
         sb.AppendLine("</rss>") |> ignore
         sb.ToString()
+
+    /// Generate an RSS 2.0 feed XML string from a list of pages, served at
+    /// "/rss.xml". Use `rssXmlAt` when the feed lives at another path.
+    let rssXml (siteTitle: string) (siteUrl: string) (siteDescription: string) (pages: FeedItem[]) =
+        rssXmlAt "/rss.xml" siteTitle siteUrl siteDescription pages
 
     /// Generate an Atom 1.0 feed XML string.
     let atomXml (siteTitle: string) (siteUrl: string) (siteDescription: string) (authorName: string) (pages: FeedItem[]) =
