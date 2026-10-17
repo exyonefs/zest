@@ -1,0 +1,575 @@
+// FsiRunner.fs
+//
+// Evaluates .zest.fsx / .fsx page and layout scripts by delegating to the
+// shared FSI session (FsiSession), falling back to a one-shot `dotnet fsi
+// --exec` process only when the session is unavailable. Batch page evaluation
+// concatenates scripts with markers so one FSI run renders many pages; files
+// whose markers are missing (individual failures) are retried one-by-one
+// instead of re-evaluating the whole batch. stderr is returned alongside
+// stdout so genuine compiler/runtime errors can be distinguished from benign
+// debug output without discarding the error text.
+//
+// Dependencies: Zest.Compiler, Zest.Markup (via DslAssembly), System.Text.Json
+
+namespace Zest.Compiler.Execution
+open System
+open System.Collections.Generic
+open System.Collections.Concurrent
+open System.IO
+open System.Diagnostics
+open System.Security.Cryptography
+open System.Text
+open System.Text.Json
+open Zest.Compiler.Model
+open PageStore
+open DslAssembly
+/// Evaluates .zest.fsx / .fsx scripts by spawning `dotnet fsi` as a subprocess.
+/// Optimized with static SHA256, pre-sized StringBuilder, and long-running FSI session reuse.
+module FsiRunner =
+
+    // ── Script Cache ─────────────────────────────────────────────────────
+
+    type private CacheEntry = {
+        Hash: string
+        Result: Result<string, string>
+        Timestamp: DateTime
+    }
+
+    let private scriptCache = ConcurrentDictionary<string, CacheEntry>()
+    let mutable private cacheEnabled = true
+
+    let setCacheEnabled (enabled: bool) = cacheEnabled <- enabled
+    let clearCache () = scriptCache.Clear()
+
+    // Static SHA256 instance (reused, thread-safe via lock)
+    let private sha256 = SHA256.Create()
+    let private sha256Lock = obj()
+
+    let private computeHash (content: string) : string =
+        let bytes = Encoding.UTF8.GetBytes(content)
+        let hash = lock sha256Lock (fun () -> sha256.ComputeHash(bytes))
+        BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant()
+
+    // ── Context serialisation ─────────────────────────────────────────────
+
+    let private writeContextFile (path: string) =
+        let pageToObj (p: ContentPage) =
+            let date = p.Date |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue ""
+            let updated = p.Updated |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue ""
+            let desc = match p.Data.TryGetValue("description") with true, v -> v.ToString() | _ -> ""
+            let dataStr key =
+                match p.Data.TryGetValue(key) with true, v -> v.ToString() | _ -> ""
+            {| url=p.Url; title=p.Title; date=date; updated=updated; slug=p.Slug; description=desc; tags=p.Tags
+               categories=p.Categories
+               author=dataStr "author"; category=dataStr "category" |}
+        let siteData =
+            let nodeDict = System.Collections.Generic.Dictionary<string, System.Text.Json.Nodes.JsonNode>()
+            for kv in !PageStore.globalDataRef do
+                let node =
+                    match Option.ofObj kv.Value with
+                    | Some v -> System.Text.Json.JsonSerializer.SerializeToNode(v)
+                    | None -> System.Text.Json.JsonSerializer.SerializeToNode("")
+                nodeDict.[kv.Key] <- node
+            nodeDict
+        let payload = {|
+            pages   = !PageStore.allPagesRef |> List.map pageToObj
+            includes = !PageStore.includesRef |> Seq.map (fun kv -> kv.Key, kv.Value) |> dict
+            siteData = siteData
+        |}
+        File.WriteAllText(path, JsonSerializer.Serialize(payload), Encoding.UTF8)
+
+    // ── DSL preamble ──────────────────────────────────────────────────────
+
+    let private buildPreamble (ctxFile: string) =
+        let dllPath = DslAssembly.getIsolatedDslDll ()
+        let sb = Text.StringBuilder(1024)
+        sb.AppendLine("#r @\"" + dllPath + "\"") |> ignore
+        // Explicitly reference Zest.Compiler.dll from the same isolated dir.
+        // Zest.Markup calls Zest.Compiler.Rendering.Markdown (via `md`/`mdDedent`),
+        // so FSI needs the assembly loaded — copying it alongside isn't enough.
+        let engineDllPath = Path.Combine(Path.GetDirectoryName(dllPath), "Zest.Compiler.dll")
+        if File.Exists(engineDllPath) then
+            sb.AppendLine("#r @\"" + engineDllPath + "\"") |> ignore
+        // Zest.Markup reaches Zest.Core for slug/date/text helpers, and FSI does
+        // not probe sibling directories, so name the assembly explicitly.
+        let coreDllPath = Path.Combine(Path.GetDirectoryName(dllPath), "Zest.Core.dll")
+        if File.Exists(coreDllPath) then
+            sb.AppendLine("#r @\"" + coreDllPath + "\"") |> ignore
+        sb.AppendLine("open System") |> ignore
+        sb.AppendLine("open System.Text.RegularExpressions") |> ignore
+        sb.AppendLine("open System.Collections.Generic") |> ignore
+        sb.AppendLine("open Zest.Markup") |> ignore
+        // Context.ensure caches the parsed context inside the FSI process, so
+        // repeated evaluations within one build do not re-read the JSON file.
+        sb.AppendLine("Zest.Markup.Context.ensure(@\"" + ctxFile + "\") |> ignore") |> ignore
+        sb.AppendLine("open Zest.Markup.Dsl") |> ignore
+        sb.AppendLine("open Zest.Markup.Components") |> ignore
+        sb.AppendLine("open Zest.Markup.DslSugar") |> ignore
+        sb.AppendLine("open Zest.Markup.Collections") |> ignore
+        sb.AppendLine("open Zest.Markup.Values") |> ignore
+        sb.AppendLine("open Zest.Markup.Seo") |> ignore
+        sb.AppendLine("open Zest.Markup.Feeds") |> ignore
+        sb.AppendLine("""let consoleLog (message: string) = eprintfn "[DEBUG] %s" message""") |> ignore
+        sb.ToString()
+
+    // ── FSI process helper (shared env var config) ────────────────────────
+
+    let private configureFsiProcess (psi: ProcessStartInfo) =
+        psi.UseShellExecute        <- false
+        psi.RedirectStandardOutput <- true
+        psi.RedirectStandardError  <- true
+        psi.StandardOutputEncoding <- Encoding.UTF8
+        psi.StandardErrorEncoding  <- Encoding.UTF8
+        psi.CreateNoWindow         <- true
+        // Performance: enable tiered PGO for faster startup, limit GC heaps
+        psi.EnvironmentVariables.["DOTNET_TieredPGO"] <- "1"
+        psi.EnvironmentVariables.["DOTNET_ReadyToRun"] <- "1"
+        psi.EnvironmentVariables.["DOTNET_GCHeapCount"] <- "1"
+        psi.EnvironmentVariables.["DOTNET_GCDynamicAdaptationMode"] <- "0"
+
+    // ── FSI execution ──────────────────────────────────────────────────────
+    //   Preferred path: reuse the long-running FsiSession (avoids the 3-10s
+    //   `dotnet fsi` cold start on every build). Falls back to a one-shot
+    //   `--exec` process when the session is unavailable. Both modes emit the
+    //   script's stdout identically (`--quiet` suppresses FSI's own banner and
+    //   `val it` lines, leaving only user printf output) and return stderr
+    //   alongside so callers can classify warnings vs. real failures.
+
+    let private runFsiOnce (scriptPath: string) : (string * string) option =
+        let psi = ProcessStartInfo("dotnet", sprintf "fsi --quiet --nologo --exec \"%s\"" scriptPath)
+        configureFsiProcess psi
+        try
+            use proc = Process.Start(psi)
+            let stdoutTask = proc.StandardOutput.ReadToEndAsync()
+            let stderrTask = proc.StandardError.ReadToEndAsync()
+            if not (proc.WaitForExit(60_000)) then
+                try proc.Kill() with _ -> ()
+                None
+            else
+                Some (stdoutTask.Result, stderrTask.Result)
+        with _ -> None
+
+    /// True when FSI diagnostics indicate a real failure (compiler errors or
+    /// runtime exceptions) rather than benign debug output (e.g. consoleLog).
+    let private hasFsiErrors = FsiSession.hasErrors
+
+    /// Compact, readable error message extracted from FSI stderr.
+    let private formatFsiError = FsiSession.formatError
+
+    /// Evaluate a script, returning (stdout, stderr) from either the shared
+    /// session or the one-shot fallback. None means both paths are unavailable.
+    let private runFsiRaw (scriptPath: string) : (string * string) option =
+        match FsiSession.tryRunScript scriptPath with
+        | Some pair -> Some pair
+        | None -> runFsiOnce scriptPath
+
+    let private runFsi (scriptPath: string) : Result<string, string> =
+        match runFsiRaw scriptPath with
+        | Some (stdout, stderr) when hasFsiErrors stderr ->
+            let message = formatFsiError stderr
+            if !PageStore.verboseRef then
+                Console.ForegroundColor <- ConsoleColor.Red
+                Console.Error.WriteLine("[FSI] Evaluation failed")
+                Console.Error.WriteLine(message)
+                Console.ResetColor()
+            Error message
+        | Some (stdout, stderr) ->
+            if !PageStore.verboseRef && not (String.IsNullOrWhiteSpace stderr) then
+                Console.ForegroundColor <- ConsoleColor.DarkGray
+                Console.Error.WriteLine("[FSI] ---- stderr (info) ----")
+                Console.Error.WriteLine(stderr)
+                Console.Error.WriteLine("[FSI] ---- end stderr ----")
+                Console.ResetColor()
+            Ok stdout
+        | None -> Error "FSI session unavailable and one-shot fallback failed."
+
+    // ── Context file path (per-build, shared) ─────────────────────────────
+
+    let mutable private ctxFilePath = ""
+    let private ctxLock = obj()
+
+    let private createContextFileLocked () =
+        // Remove the previous context file — each build writes a fresh one
+        // under a new GUID, and stale files would accumulate in %TEMP%.
+        if not (String.IsNullOrEmpty ctxFilePath) && File.Exists ctxFilePath then
+            try File.Delete ctxFilePath with _ -> ()
+        ctxFilePath <- Path.Combine(Path.GetTempPath(), sprintf "zest-ctx-%s.json" (Guid.NewGuid().ToString("N")))
+        writeContextFile ctxFilePath
+
+    let resetSession () = lock ctxLock createContextFileLocked
+
+    /// Return a context-file path guaranteed to exist, creating it on demand.
+    /// Callers must use the returned value (not the mutable field): a
+    /// concurrent `resetSession` would otherwise be able to delete the file
+    /// between the existence check and the FSI invocation.
+    let private ensureContextFile () =
+        lock ctxLock (fun () ->
+            if String.IsNullOrEmpty ctxFilePath || not (File.Exists ctxFilePath) then
+                createContextFileLocked ()
+            ctxFilePath)
+
+    // ── isPageScript: detect whether a file uses the Zest DSL render pipeline.
+    //   .zest.fsx always returns true (the extension guarantees it).
+    //   Plain .fsx always returns false — Zest does not route ordinary scripts.
+    //   .md / .markdown always returns false (plain Markdown).
+    //   Everything else (.ztk / .njk / …) is matched by keyword patterns.
+    //
+    //   Takes the full path rather than a bare extension because
+    //   `Path.GetExtension "page.zest.fsx"` is ".fsx", which would otherwise
+    //   collapse pages and plain scripts into the same branch.
+
+    let isPageScript (filePath: string) (text: string) =
+        let ext = Path.GetExtension(filePath).ToLowerInvariant()
+        if String.IsNullOrEmpty ext then false
+        elif filePath.EndsWith(FileTypes.ZestScript, StringComparison.OrdinalIgnoreCase) then true
+        elif ext = FileTypes.FSharpScript then false
+        elif ext = FileTypes.Markdown || ext = FileTypes.MarkdownLong then false
+        else
+            text.Split('\n')
+            |> Array.map (fun l -> l.Trim())
+            |> Array.tryFind (fun l ->
+                not (String.IsNullOrEmpty l)
+                && not (l.StartsWith("//"))
+                && not (l.StartsWith("#r "))
+                && not (l.StartsWith("#load ")))
+            |> Option.map (fun l ->
+                l.StartsWith("render") || l = "page" || l.StartsWith("page {")
+                || l.StartsWith("let ") || l.StartsWith("open ")
+                || l.StartsWith("div ") || l.StartsWith("divClass ") || l.StartsWith("divC ")
+                || l.StartsWith("h1 ") || l.StartsWith("h2 ") || l.StartsWith("h3 ")
+                || l.StartsWith("p ") || l.StartsWith("section ") || l.StartsWith("article ")
+                || l.StartsWith("a ") || l.StartsWith("span ")
+                || l.StartsWith("ul ") || l.StartsWith("ol "))
+            |> Option.defaultValue false
+
+    // ── F# layout evaluation ───────────────────────────────────────────────
+    //   A `.zest.fsx`/`.fsx` layout is evaluated by FSI (just like a page
+    //   script). The page `content`, `page` metadata, and `site` config are
+    //   injected as top-level F# bindings prepended to the same temp script so
+    //   the layout can compose the final document with the DSL builders and
+    //   `printf`/`render` the result to stdout (which becomes the rendered HTML).
+
+    let private buildLayoutPreamble (ctxFile: string) =
+        let dllPath = DslAssembly.getIsolatedDslDll ()
+        let sb = Text.StringBuilder(1024)
+        sb.AppendLine("#r @\"" + dllPath + "\"") |> ignore
+        // Zest.Core backs the DSL's slug/date/text helpers; FSI needs it named.
+        let coreDllPath = Path.Combine(Path.GetDirectoryName(dllPath), "Zest.Core.dll")
+        if File.Exists(coreDllPath) then
+            sb.AppendLine("#r @\"" + coreDllPath + "\"") |> ignore
+        sb.AppendLine("open System") |> ignore
+        sb.AppendLine("open System.Text.RegularExpressions") |> ignore
+        sb.AppendLine("open System.Collections.Generic") |> ignore
+        sb.AppendLine("open Zest.Markup") |> ignore
+        // Context.ensure caches the parsed context inside the FSI process, so
+        // repeated evaluations within one build do not re-read the JSON file.
+        sb.AppendLine("Zest.Markup.Context.ensure(@\"" + ctxFile + "\") |> ignore") |> ignore
+        sb.AppendLine("open Zest.Markup.Dsl") |> ignore
+        sb.AppendLine("open Zest.Markup.Components") |> ignore
+        sb.AppendLine("open Zest.Markup.DslSugar") |> ignore
+        sb.AppendLine("open Zest.Markup.Collections") |> ignore
+        sb.AppendLine("open Zest.Markup.Values") |> ignore
+        sb.AppendLine("open Zest.Markup.Seo") |> ignore
+        sb.AppendLine("open Zest.Markup.Feeds") |> ignore
+        sb.AppendLine("""let consoleLog (message: string) = eprintfn "[DEBUG] %s" message""") |> ignore
+        sb.ToString()
+
+    /// Build the top-level F# bindings (content/page/site) injected into layout
+    /// scripts so they can compose the final document from the current page.
+    /// The bindings must live in the SAME script as the layout: F# 10 keeps
+    /// bare top-level `let`s of a `#load`'d .fsx invisible to the loading
+    /// script (FS0039), while in one compilation unit they are in scope for
+    /// everything below.
+    let private buildLayoutDataBindings (content: string) (page: ContentPage)
+                                        (config: SiteConfig)
+                                        (globalData: IDictionary<string, obj>) : string =
+        let date = page.Date |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue ""
+        let desc = match page.Data.TryGetValue("description") with true, v -> v.ToString() | _ -> ""
+        let dataStr key =
+            match page.Data.TryGetValue(key) with true, v -> v.ToString() | _ -> ""
+        let mutable gv = Unchecked.defaultof<obj>
+        let github  = if globalData.TryGetValue("social_github",  &gv) then gv.ToString() else ""
+        let twitter = if globalData.TryGetValue("social_twitter", &gv) then gv.ToString() else ""
+
+        let esc (s: string) =
+            s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n")
+
+        let tagsArr =
+            page.Tags
+            |> Seq.map (fun t -> "\"" + esc t + "\"")
+            |> String.concat "; "
+
+        // An empty array literal `[||]` would infer a generic type and trip
+        // FS0030 (value restriction) the moment the layout script is read,
+        // so empty tag sets are annotated explicitly.
+        let tagsExpr =
+            if page.Tags.IsEmpty then "([||] : string array)"
+            else sprintf "[|%s|]" tagsArr
+
+        let catArr =
+            page.Categories
+            |> Seq.map (fun t -> "\"" + esc t + "\"")
+            |> String.concat "; "
+        let catExpr =
+            if page.Categories.IsEmpty then "([||] : string array)"
+            else sprintf "[|%s|]" catArr
+
+        let updated = page.Updated |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue ""
+
+        sprintf "let content = \"%s\"\n" (esc content)
+        + sprintf "let page = {| title = \"%s\"; url = \"%s\"; date = \"%s\"; updated = \"%s\"; slug = \"%s\"; description = \"%s\"; author = \"%s\"; category = \"%s\"; tags = %s; categories = %s |}\n"
+            (esc page.Title) (esc page.Url) (esc date) (esc updated) (esc page.Slug) (esc desc) (esc (dataStr "author")) (esc (dataStr "category")) tagsExpr catExpr
+        + sprintf "let site = {| title = \"%s\"; description = \"%s\"; author = \"%s\"; language = \"%s\"; social_github = \"%s\"; social_twitter = \"%s\" |}\n"
+            (esc config.Title) (esc config.Description) (esc config.Author) (esc config.Language) (esc github) (esc twitter)
+
+    let evaluateLayoutScript (scriptText: string) (content: string)
+                              (page: ContentPage) (config: SiteConfig)
+                              (globalData: IDictionary<string, obj>) : Result<string, string> =
+        try
+            let ctx = ensureContextFile ()
+
+            let dataContent = buildLayoutDataBindings content page config globalData
+            let preamble = buildLayoutPreamble ctx
+            let tmpFsx = Path.Combine(Path.GetTempPath(), sprintf "zest-layout-%s.fsx" (Guid.NewGuid().ToString("N")))
+            try
+                File.WriteAllText(tmpFsx, preamble + "\n" + dataContent + "\n" + scriptText, Encoding.UTF8)
+                runFsi tmpFsx
+            finally
+                if File.Exists tmpFsx then File.Delete tmpFsx
+        with ex ->
+            Error(sprintf "Layout evaluation threw: %s" ex.Message)
+
+    // ── Batch layout evaluation: many pages in ONE FSI process ────────────
+    //   Each layout application becomes its own module so top-level binding
+    //   names (e.g. `let ctx = ...`) never collide across pages (FS0037).
+    //   A compile error fails the whole batch; runtime errors kill only the
+    //   offending module, so healthy markers are salvaged and failed tasks are
+    //   retried individually rather than re-evaluating the entire batch.
+
+    /// Batch-evaluate multiple F# layout applications in a single FSI run.
+    /// Each task is (taskKey, scriptText, content, page, config, globalData);
+    /// taskKey must be unique per task (typically "<sourcePath>|<layoutName>").
+    /// Every task key is present in the returned map — failed tasks are
+    /// retried individually so one bad page never loses its siblings.
+    let evaluateLayoutScriptsBatch
+        (tasks: (string * string * string * ContentPage * SiteConfig * IDictionary<string, obj>) list)
+        : Map<string, Result<string, string>> =
+        if tasks.IsEmpty then Map.empty
+        else
+            try
+                let ctx = ensureContextFile ()
+
+                let preamble = buildLayoutPreamble ctx
+                let sb = System.Text.StringBuilder(preamble.Length + 4096)
+                sb.Append(preamble) |> ignore
+
+                // Numeric IDs map back to task keys (avoids backslash escaping
+                // in F# string literals, matching the page-script batch path).
+                let idMap = Dictionary<int, string>()
+                let mutable idx = 0
+                for taskKey, scriptText, content, page, config, globalData in tasks do
+                    let dataContent = buildLayoutDataBindings content page config globalData
+                    idMap.[idx] <- taskKey
+                    let indented =
+                        (dataContent + scriptText).Split('\n')
+                        |> Array.map (fun l -> if String.IsNullOrWhiteSpace l then "" else "    " + l)
+                        |> String.concat "\n"
+                    Printf.bprintf sb "\nmodule BatchLayout_%d =\n" idx
+                    Printf.bprintf sb "    printfn \"___ZEST_LAYOUT_START_%d___\"\n" idx
+                    Printf.bprintf sb "%s\n" indented
+                    Printf.bprintf sb "    printfn \"___ZEST_LAYOUT_END_%d___\"\n" idx
+                    idx <- idx + 1
+
+                let tmpFsx = Path.Combine(Path.GetTempPath(), sprintf "zest-layout-batch-%s.fsx" (Guid.NewGuid().ToString("N")))
+                try
+                    File.WriteAllText(tmpFsx, sb.ToString(), Encoding.UTF8)
+                    match runFsiRaw tmpFsx with
+                    | Some (stdout, stderr) ->
+                        if hasFsiErrors stderr && !PageStore.verboseRef then
+                            Console.Error.WriteLine(sprintf "[FSI] Layout batch reported errors: %s" (formatFsiError stderr))
+                        let results = Dictionary<string, Result<string, string>>()
+                        for kv in idMap do
+                            let s = sprintf "___ZEST_LAYOUT_START_%d___" kv.Key
+                            let e = sprintf "___ZEST_LAYOUT_END_%d___" kv.Key
+                            let sIdx = stdout.IndexOf(s, StringComparison.Ordinal)
+                            let eIdx = stdout.IndexOf(e, StringComparison.Ordinal)
+                            if sIdx >= 0 && eIdx > sIdx then
+                                let content = stdout.Substring(sIdx + s.Length, eIdx - (sIdx + s.Length))
+                                let trimmed = content.Trim()
+                                results.[kv.Value] <- if trimmed.Length > 0 then Ok trimmed else Ok content
+                            else
+                                results.[kv.Value] <- Error "batch evaluation failed (marker missing)"
+                        // Retry failed tasks individually so the error is isolated.
+                        let mutable mapResult = results |> Seq.map (fun kv -> kv.Key, kv.Value) |> Map.ofSeq
+                        for taskKey, scriptText, content, page, config, globalData in tasks do
+                            match mapResult.TryFind taskKey with
+                            | Some (Error _) | None ->
+                                mapResult <- mapResult.Add(taskKey, evaluateLayoutScript scriptText content page config globalData)
+                            | Some _ -> ()
+                        mapResult
+                    | None ->
+                        // Session unavailable entirely — one-shot fallback per task.
+                        if !PageStore.verboseRef then
+                            Console.Error.WriteLine("[FSI] Session unavailable; evaluating layout scripts individually")
+                        tasks
+                        |> List.map (fun (taskKey, scriptText, content, page, config, globalData) ->
+                            taskKey, evaluateLayoutScript scriptText content page config globalData)
+                        |> Map.ofList
+                finally
+                    if File.Exists tmpFsx then File.Delete tmpFsx
+            with ex ->
+                tasks
+                |> List.map (fun (taskKey, _, _, _, _, _) ->
+                    taskKey, Error(sprintf "Layout batch evaluation threw: %s" ex.Message))
+                |> Map.ofList
+
+    // ── Individual script evaluation ──────────────────────────────────────
+
+    /// Drop the `// @…` header lines: the front-matter parser already consumed
+    /// them, and the preamble exposes the same values as bindings.
+    let private stripHeaderLines (scriptText: string) : string =
+        scriptText.Split('\n')
+        |> Array.filter (fun l ->
+            let t = l.TrimStart()
+            not (t.StartsWith("// @")))
+        |> String.concat "\n"
+
+    /// Cache key for a page script. The injected bindings are part of the hash:
+    /// the pagination generator evaluates one template once per window, and two
+    /// windows of the same file must never share a cache entry.
+    let private scriptHash (bindings: string) (scriptText: string) : string =
+        computeHash (bindings + "\u0000" + scriptText)
+
+    /// Indent a block by one level so it sits inside the batch module wrapper.
+    let private indent (text: string) : string =
+        text.Split('\n')
+        |> Array.map (fun l -> if String.IsNullOrWhiteSpace l then "" else "    " + l)
+        |> String.concat "\n"
+
+    /// Evaluate a page script with extra F# bindings injected above it. The
+    /// bindings compile into the script's own scope, so a template reads them
+    /// exactly like the preamble's own `sitePages()`.
+    let evaluatePageScriptWithBindings (bindings: string) (scriptText: string) : Result<string, string> =
+        try
+            let hash = scriptHash bindings scriptText
+            match scriptCache.TryGetValue(hash) with
+            | true, e when cacheEnabled -> e.Result
+            | _ ->
+                let ctx = ensureContextFile ()
+
+                let body = (buildPreamble ctx) + "\n" + bindings + stripHeaderLines scriptText
+
+                let tmpFsx = Path.Combine(Path.GetTempPath(), sprintf "zest-page-%s.fsx" (Guid.NewGuid().ToString("N")))
+                try
+                    File.WriteAllText(tmpFsx, body, Encoding.UTF8)
+                    match runFsi tmpFsx with
+                    | Ok html ->
+                        let result = Ok html
+                        if cacheEnabled then
+                            scriptCache.[hash] <- { Hash = hash; Result = result; Timestamp = DateTime.Now }
+                        result
+                    | Error msg ->
+                        Error(sprintf "FSI evaluation reported errors — %s" msg)
+                finally
+                    if File.Exists tmpFsx then File.Delete tmpFsx
+        with ex ->
+            Error(sprintf "FsiRunner threw: %s" ex.Message)
+
+    let evaluatePageScript (scriptText: string) : Result<string, string> =
+        evaluatePageScriptWithBindings "" scriptText
+
+    // ── Batch evaluation: all page scripts in ONE FSI process ─────────────
+    //   Uses numeric marker IDs to avoid backslash/special-char issues in paths.
+
+    /// Batch-evaluate page scripts that each carry their own injected bindings.
+    /// A task is (taskKey, bindings, scriptText); the key is the caller's label
+    /// for the result — the pagination generator passes a window's SourcePath.
+    let evaluatePageScriptsBatchWithBindings (tasks: (string * string * string) list)
+        : Map<string, Result<string, string>> =
+        if tasks.IsEmpty then Map.empty
+        else
+            try
+                let ctx = ensureContextFile ()
+
+                let preamble = buildPreamble ctx
+                let sb = System.Text.StringBuilder(preamble.Length + 2048)
+                sb.Append(preamble) |> ignore
+
+                // Map numeric IDs → task keys (avoids backslash escaping in F# string literals)
+                let idMap = Dictionary<int, string>()
+                let mutable idx = 0
+
+                for taskKey, bindings, scriptText in tasks do
+                    let stripped = stripHeaderLines scriptText
+                    let markerId = idx
+                    idMap.[markerId] <- taskKey
+                    idx <- idx + 1
+                    // Each script becomes its own module so identical top-level
+                    // binding names across pages (e.g. `let cloud = ...`) do not
+                    // collide with FS0037 and abort the whole batch. Injected
+                    // bindings come first, so the script reads them as its own.
+                    Printf.bprintf sb "\nmodule BatchScript_%d =\n" markerId
+                    Printf.bprintf sb "    printfn \"___ZEST_BATCH_START_%d___\"\n" markerId
+                    if bindings.Length > 0 then
+                        Printf.bprintf sb "%s\n" (indent bindings)
+                    Printf.bprintf sb "%s\n" (indent stripped)
+                    Printf.bprintf sb "    printfn \"___ZEST_BATCH_END_%d___\"\n" markerId
+
+                let tmpFsx = Path.Combine(Path.GetTempPath(), sprintf "zest-batch-%s.fsx" (Guid.NewGuid().ToString("N")))
+                try
+                    File.WriteAllText(tmpFsx, sb.ToString(), Encoding.UTF8)
+                    match runFsiRaw tmpFsx with
+                    | Some (stdout, stderr) ->
+                        if hasFsiErrors stderr && !PageStore.verboseRef then
+                            Console.Error.WriteLine(sprintf "[FSI] Batch reported errors: %s" (formatFsiError stderr))
+                        // A compile error in any script fails the whole batch
+                        // (no markers at all); a runtime error kills only the
+                        // offending script. Salvage whatever markers appear in
+                        // stdout so the healthy scripts are not re-evaluated.
+                        let results = Dictionary<string, Result<string, string>>()
+                        for kv in idMap do
+                            let markerId = kv.Key
+                            let taskKey = kv.Value
+                            let s = sprintf "___ZEST_BATCH_START_%d___" markerId
+                            let e = sprintf "___ZEST_BATCH_END_%d___" markerId
+                            let sIdx = stdout.IndexOf(s, StringComparison.Ordinal)
+                            let eIdx = stdout.IndexOf(e, StringComparison.Ordinal)
+                            // Tasks without both markers are left out of the
+                            // dictionary so they fall through to the retry loop.
+                            if sIdx >= 0 && eIdx > sIdx then
+                                let content = stdout.Substring(sIdx + s.Length, eIdx - (sIdx + s.Length))
+                                let trimmed = content.Trim()
+                                if trimmed.Length > 0 then
+                                    results.[taskKey] <- Ok trimmed
+                                else
+                                    results.[taskKey] <- Ok content
+
+                        for taskKey, bindings, scriptText in tasks do
+                            match results.TryGetValue(taskKey) with
+                            | true, Ok html when cacheEnabled ->
+                                let hash = scriptHash bindings scriptText
+                                scriptCache.[hash] <- { Hash = hash; Result = Ok html; Timestamp = DateTime.Now }
+                            | true, _ ->
+                                // Already has a result (Ok without caching).
+                                ()
+                            | false, _ ->
+                                // Marker missing — the script failed inside the batch.
+                                // Re-evaluate only this task, not the whole batch.
+                                results.[taskKey] <- evaluatePageScriptWithBindings bindings scriptText
+                        results |> Seq.map (fun kv -> kv.Key, kv.Value) |> Map.ofSeq
+                    | None ->
+                        // Session unavailable entirely — one-shot fallback per task.
+                        if !PageStore.verboseRef then
+                            Console.Error.WriteLine("[FSI] Session unavailable; evaluating scripts individually")
+                        tasks |> List.map (fun (taskKey, bindings, scriptText) ->
+                            taskKey, evaluatePageScriptWithBindings bindings scriptText) |> Map.ofList
+                finally
+                    if File.Exists tmpFsx then File.Delete tmpFsx
+            with ex ->
+                tasks |> List.map (fun (taskKey, _, _) ->
+                    taskKey, Error(sprintf "Batch evaluation threw: %s" ex.Message)) |> Map.ofList
+
+    let evaluatePageScriptsBatch (scripts: (string * string) list) : Map<string, Result<string, string>> =
+        scripts
+        |> List.map (fun (filePath, scriptText) -> filePath, "", scriptText)
+        |> evaluatePageScriptsBatchWithBindings

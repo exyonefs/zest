@@ -1,0 +1,714 @@
+<p align="center">
+  <img src="zest.png" alt="Zest" width="128" height="128">
+</p>
+
+<h1 align="center">Zest SSG</h1>
+<p align="center"><em>Zest: Easy Static-site Toolkit</em></p>
+<p align="center">
+  <a href="LICENSE">License</a> · <a href="#quick-start">Quick Start</a> · <a href="#documentation">Docs</a>
+</p>
+
+---
+
+**Zest** is a hybrid F# + C# static site generator in which templates are real code, not strings. It is built on a single premise: your templating language and your host language should be one and the same.
+
+---
+
+## Table of Contents
+
+- [Why Zest?](#why-zest)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Writing Content](#writing-content)
+- [Templates](#templates)
+- [Project Layout](#project-layout)
+- [Commands](#commands)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [Building from Source](#building-from-source)
+- [Design Philosophy](#design-philosophy)
+- [License](#license)
+
+---
+
+## Why Zest?
+
+- **Fast.** Pages are compiled in parallel, cached aggressively, and served by a dev server with live reload. Large sites stay responsive because the build pipeline is embarrassingly parallel by design.
+
+- **F# everywhere.** Pages can be written as ordinary F# programs using a type-safe HTML DSL — loops, conditionals, functions, and data, with no template-language workarounds. Markdown remains available whenever prose is preferable to code.
+
+- **No lock-in.** Zest ships exactly one template language — **Zestucks** (`.ztk`, and `.njk` for Nunjucks files), which is syntax-compatible with Nunjucks — and one script layer, `.zest.fsx`. Output is plain, static HTML that can be hosted anywhere.
+
+- **Quiet by default.** The bundled starter ships with no animation, no shadows, and no hover theatrics — typography and whitespace carry the page.
+
+- **A single binary.** One `dotnet` CLI tool handles `init`, `build`, `serve`, `clean`, and `preview`.
+
+---
+
+## Features
+
+- **Template as Code** — `.zest.fsx` files are real F# scripts executed at build time via `dotnet fsi`. Full F# is available: list comprehensions, pattern matching, string interpolation, and arbitrary computation.
+
+- **HTML DSL** — Compose HTML declaratively, e.g. `render [ h1 []; p [] ]`.
+
+- **Inline Markdown** — Write Markdown directly inside a `.zest.fsx` page using the `md` helper, and mix it with the HTML DSL: `md """# Title\n**bold**"""`.
+
+- **Markdown posts** — Standard `.md` files with frontmatter support.
+
+- **Full Markdown syntax** — Parsing is backed by [Markdig](https://github.com/xoofx/markdig) (CommonMark + extensions): pipe tables, task lists, footnotes, auto-identifier heading anchors, autolinks, definition lists, figures, and raw inline HTML. Fenced code keeps its `language-*` class, which is the hand-off point for a client-side highlighter (highlight.js / Prism) injected from `_finalize.fsx`.
+
+- **Built-in image processor** — Compress, downscale, convert to WebP and thumbnail every image a site references, then rewrite the references — including `og:image` and CSS `url()` — to the processed files, to a unified output directory, or to an image-host / CDN URL. Driven from `_finalize.fsx` through one entry point.
+
+- **ZCSS** — A CSS superset with nesting, F#-style `let` bindings, math expressions, color functions, and mixins — compiled to standard CSS.
+
+- **Zestucks templates** — `.ztk` files support the full Nunjucks-compatible feature set: variables, filters, `{% if %}` / `{% for %}`, template inheritance with `{% extends %}` / `{% block %}`, `{% include %}`, and macros, plus the Zest API (`site`, `page`, `pages`, `tags`, `collections`).
+
+- **`_prebuild.fsx`** — An optional pre-build script (run before each build) for injecting dynamic data, loading JSON/TOML, and reading environment variables.
+
+- **`_finalize.fsx`** — An optional post-build script (run after the site is written) for link checks, search indexes, build reports, output shaping (HTML/CSS/JS pretty-printing and minification), and the image pipeline. It also exposes the Markdown engine (`md`) and the image processor (`processImages`) as a single conversion entry point, and may only write inside `_site/`.
+
+- **TOML configuration** — Zero-config defaults; customize via `_config.toml` and `_data/*.toml`. No YAML.
+
+- **Live reload** — `zest serve` watches for changes and rebuilds automatically.
+
+- **Batch evaluation** — Multiple F# page scripts are evaluated in a single FSI process for fast builds.
+
+- **Incremental builds** — File-change detection skips unchanged pages and assets.
+
+- **Cross-platform** — Builds for Windows x64, Linux x64/ARM64, and macOS ARM64.
+
+---
+
+## Quick Start
+
+```bash
+# Scaffold a new project
+zest init my-site
+
+# Develop with live reload
+cd my-site && zest serve --port 8080
+
+# Build for production
+zest build
+
+# Preview the built site
+zest preview
+```
+
+---
+
+## Writing Content
+
+### Markdown posts
+
+```markdown
++++
+title = "Hello, world"
+date = 2026-01-15
+tags = ["zest", "fsharp"]
+layout = "post"
++++
+This is a blog post.
+```
+
+### Pages as F# (`.zest.fsx`)
+
+```fsharp
+// @title About
+// @layout default
+render [
+  h1 [ text "About this site" ]
+  p  [ text "Written in F#, rendered as HTML." ]
+]
+```
+
+The engine pre-opens the DSL for `.zest.fsx` pages (it also opens `Values`, `Seo` and `Feeds`). In plain FSI, `open Zest.Markup` alone is enough for the markup and CSS DSL — `Dsl`, `DslSugar`, `Stylesheet`, `InlineStyle`, `Components`, `Compound` and `Collections` are all `[<AutoOpen>]` — while the content helpers in `Values` (`md`, `chunk`, …), `Seo` and `Feeds` still need an explicit `open`.
+
+### Example: a `.zest.fsx` page
+
+```fsharp
+// @title Hello World
+// @layout default
+// @description My first Zest page
+let pageTitle = "Hello from F#"
+let items = ["F#"; "Zest"; "SSG"]
+
+render [
+    h1 [ text pageTitle ]
+    p  [ text "This page is generated by real F# code at build time." ]
+    ul [ for i in items -> li [ text i ] ]
+]
+```
+
+### Example: inline Markdown inside a `.zest.fsx` page
+
+The `md` helper renders a Markdown string to an HTML string, so prose and the F# HTML DSL can be blended within a single page. Like every other DSL builder, `md` returns a plain `string`.
+
+```fsharp
+// @title About
+// @layout default
+open Zest.Markup
+
+render [
+    divC "about" [
+        md """
+# About
+This page is a **native template** written in `.zest.fsx` (real F#), where
+Markdown and the HTML DSL live side by side.
+Learn more at the [Zest repository](https://github.com/zest-ssg/zest).
+"""
+    ]
+]
+```
+
+### Styles as ZCSS (`.zcss`)
+
+```zcss
+// F#-style let bindings with math expressions
+let primary       = #3b82f6
+let space1        = 0.25r
+let space4        = space1 * 4          // 1rem
+let primary-light = primary |> lighten(45%)
+
+.tag [
+  color: $primary
+  background-color: $primary-light
+  padding-block: $space4
+  border-radius: 9999px
+]
+```
+
+Compiles to:
+
+```css
+.tag {
+  color: #3b82f6;
+  background-color: #adf4ff;
+  padding-block: 1rem;
+  border-radius: 9999px;
+}
+```
+
+### Data
+
+`_prebuild.fsx` runs before every build and can inject global data:
+
+```fsharp
+addGlobal "socials" [
+  {| label = "GitHub"; url = "https://github.com/zest"; icon = "github" |}
+]
+```
+
+Templates read it as `{{ site.socials }}`.
+
+---
+
+## Templates
+
+Zest has exactly two authoring formats:
+
+| Format          | Purpose                                                             |
+|-----------------|---------------------------------------------------------------------|
+| `.ztk` / `.njk` | **Zestucks** templates — Nunjucks-compatible syntax for markup.      |
+| `.zest.fsx`     | F# scripts — data loading, logic, and complex computation.           |
+
+Zestucks is Zest's own brand for its Nunjucks-compatible engine. It speaks the
+same syntax — variables, filters, `if` / `for`, inheritance, `block`, `include`,
+and macros — so existing Nunjucks templates work unchanged. `.ztk` and `.njk`
+are the same language — same engine, same syntax: use `.ztk` for new templates,
+while `.njk` stays supported for files ported from Nunjucks.
+
+Layouts and partials are `.ztk` or `.njk` files (plain HTML works too: `.html`
+files are run through Zestucks when they contain `{{ }}` / `{% %}` syntax).
+
+```html
+<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ site.title }}</title>
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  {{ include header.ztk }}
+  <main>
+    {{ content | safe }}
+  </main>
+  {{ include footer.ztk }}
+</body>
+</html>
+```
+
+Supported Zestucks constructs include `{{ include }}`, `{{ content }}`, `{% if %}` / `{% for %}`, `{% assign %}`, filters (`| t`, `| date`, `| readingTime`), and i18n strings from `_locales/*.toml`.
+
+### Nunjucks compatibility (`.njk`)
+
+The name **Zestucks** comes from the frustration that produced it: we were
+*stuck* with Nunjucks' Node-based tooling, so we rewrote the engine in F#. The
+`-ucks` ending keeps the nod to Nunjucks. `.ztk` and `.njk` are the same
+language — same engine, same syntax, no translation step — so an existing
+Nunjucks template can be dropped in as is.
+
+| Position            | `.ztk`      | `.njk`      | Meaning                        |
+|---------------------|-------------|-------------|--------------------------------|
+| `_layouts/`         | yes         | yes         | Layout, resolved by stem name. |
+| `_includes/`        | yes         | yes         | Partial referenced bare.       |
+| `content/`          | yes         | yes         | Becomes a routed page.         |
+| References to it    | `layout.ztk`| `layout.njk`| Both spellings work.           |
+
+References may omit the extension entirely: `{% include "head" %}` and
+`{% extends "base" %}` resolve against `_includes/` then `_layouts/`, trying
+`.ztk` before `.njk`. When both exist, `.ztk` wins.
+
+---
+
+## Project Layout
+
+```
+.
+├── _config.toml           # optional: site metadata and build options
+├── _prebuild.fsx          # optional: pre-build script (global data, hooks)
+├── _finalize.fsx          # optional: post-build script (validate, index)
+├── _layouts/              # layouts: .ztk (Zestucks) or .zest.fsx (F# DSL)
+├── _includes/             # partials pulled in with {{ include }}
+├── _data/                 # global data (nav.toml, …)
+├── _locales/              # i18n string tables (en.toml, …)
+├── assets/                # styles (ZCSS), images, fonts
+├── content/               # pages (.zest.fsx) and posts (.md)
+└── _site/                 # build output
+```
+
+Every entry above is optional. With no `_config.toml` at all the site still
+builds: the title falls back to a default, and content is read from `content/`
+when it exists and from the project root otherwise. Directory names are
+convention, never configuration.
+
+### Configuration
+
+`_config.toml` recognises exactly two tables.
+
+| Table    | Key                                                                                 |
+|----------|-------------------------------------------------------------------------------------|
+| `[site]` | `title` `url` `description` `language` `author` `version` `content_dir` `default_layout` `permalink_format` `dev_server_port` `live_reload_port` `log_level` `log_to_file` `log_timestamps` |
+| `[build]`| `output` `parallel` `incremental` `cache_busting` `finalize_on_error` |
+
+Output shaping — pretty-printing and minifying HTML, CSS and JS — is not
+configured here. It is post-build work done in `_finalize.fsx`, where the
+author chooses exactly what to apply; see [Build Hooks](#build-hooks).
+
+Anything not listed — `[[taxonomies]]`, `[menu.*]`, `[[defaults]]`,
+`[pagination]`, `[params]`, `include`, `exclude`,
+`[template.zestucks] compatibility` — is read at the top level.
+
+---
+
+## Commands
+
+| Command             | Description                                       |
+|---------------------|---------------------------------------------------|
+| `zest init [path]`  | Scaffold a new site from the bundled starter.     |
+| `zest init --empty` | Scaffold the directory layout only.               |
+| `zest build`        | Build the site into `_site/`.                     |
+| `zest serve`        | Build and start a dev server with live reload.    |
+| `zest preview`      | Serve the built site without rebuilding.          |
+| `zest clean`        | Remove build output.                              |
+
+---
+
+## Architecture
+
+| Project           | Language | Responsibility                                                                 |
+|-------------------|----------|----------------------------------------------------------------------------------|
+| **Zest.App**      | C#       | CLI entry point and host: command routing, configuration, dev server, file watching, logging, embedded starters. |
+| **Zest.Compiler** | F#       | Turns sources into a site: content pipeline, Zestucks templates, ZCSS, FSI scripting. |
+| **Zest.Markup**   | F#       | The API surface a page author writes against: the HTML/ZCSS markup builders, SEO and feed helpers, page queries. |
+| **Zest.Core**     | F#       | Dependency-free primitives shared by the compiler and markup: slugs, prose metrics, dates. |
+
+### Repository Layout
+
+| Path               | Purpose                                                                 |
+|--------------------|-------------------------------------------------------------------------|
+| `src/`             | The projects that ship in the `zest` tool: `Zest.App` (C#), `Zest.Compiler` (F#), `Zest.Markup` (F#), `Zest.Core` (F#). |
+| `.config/zest/`    | CLI configuration, split by concern: `meta.toml` (identity, branding) and `help.toml` (all help copy). Embedded into the tool as manifest resources. |
+| `.claude/`         | Claude Code settings and permissions. The engineering contract itself lives in `CLAUDE.md` at the root. |
+| `.devcontainer/`   | Reproducible development container: `devcontainer.json` plus a .NET SDK `Dockerfile`. |
+| `.husky/`          | Git hooks (`pre-commit`, `commit-msg`) and installers that set `core.hooksPath`. |
+
+### Source Layout
+
+Directories are named after the concern they hold, and in `Zest.Compiler` the
+directory name is also the namespace (last segment included). `Zest.Markup`
+keeps a single flat namespace — its subdirectories only organise files, because
+its module names are the public DSL surface page authors write against.
+
+```
+src/Zest.App/            C#   Program, Cli/, Command/, Config/, Runtime/, Starter/
+src/Zest.Compiler/       F#   Model/ Zcss/ Build/ Zestucks/ Rendering/ Execution/
+src/Zest.Markup/         F#   Dsl/ Primitives/ Css/ Component/ Query/ Metadata/
+src/Zest.Core/           F#   SlugFormatter, TextMetrics, DateFormatter
+```
+
+| Directory           | Holds                                                                |
+|---------------------|----------------------------------------------------------------------|
+| `Zest.Compiler/Model`      | Records with no behaviour: pages, front matter, config, file types.  |
+| `Zest.Compiler/Zcss`       | The ZCSS compiler: tokenizer, parsers, evaluator, CSS writer.        |
+| `Zest.Compiler/Build`      | Front matter parsing, permalinks, the page pipeline, generated pages, the build entry point. |
+| `Zest.Compiler/Zestucks`   | The Zestucks template engine, end to end.                            |
+| `Zest.Compiler/Rendering`  | HTML nodes, HTML writing, formatting, Markdown, page construction.   |
+| `Zest.Compiler/Media`      | The built-in image processor: resize, re-encode, variants, reference rewriting. |
+| `Zest.Compiler/Execution`  | `dotnet fsi` execution, the page index, and Zest's template filters. |
+| `Zest.App/Runtime`         | The CLI process's runtime facilities: HTTP servers, watching, logging. |
+| `Zest.App/Cli`             | Argument parsing, options, help text.                                |
+| `Zest.App/Command`         | One type per subcommand (`build`, `clean`, `init`, `serve`).         |
+| `Zest.App/Starter`         | The single scaffold site copied out by `zest init`.                  |
+
+---
+
+## Documentation
+
+### File Types
+
+Zest distinguishes two kinds of F# script. Only one of them becomes a page.
+
+| File pattern   | Purpose                                                        | Processing                                          |
+|----------------|----------------------------------------------------------------|-----------------------------------------------------|
+| `*.ztk` / `*.html` | Zestucks native templates (filters, macros, inheritance, Zest API) | Rendered by the Zestucks engine                |
+| `*.njk`        | Nunjucks-compatible templates — same engine as `.ztk`            | Rendered by the Zestucks engine                     |
+| `*.zest.fsx`   | **Zest Pages** — F# script templates with routing semantics      | Compiled via `dotnet fsi`, then given a URL         |
+| `*.fsx`        | Ordinary F# scripts — **Zest does not route them**               | Ignored by discovery                                |
+| `*.md`         | Standard Markdown                                                | Rendered to HTML                                    |
+| `*.zcss`       | ZCSS stylesheets (CSS superset)                                  | Compiled to `.css`                                  |
+| `*.toml`       | Configuration and data (no YAML)                                 | Parsed at build time                                |
+| `_config.toml` | **Site configuration** — project root only                       | Parsed before the build                             |
+| `_prebuild.fsx`| **Pre-build script** — project root only, never routed           | Executed via `dotnet fsi` before the build          |
+| `_finalize.fsx`| **Post-build script** — project root only, never routed          | Executed via `dotnet fsi` after `_site/` is written |
+
+`*.fsx` scripts are invisible to the build: they are never scanned, evaluated,
+or given a URL. Use them for whatever a page does not need — data generation,
+deployment helpers, scratch work. Keeping them next to pages is fine.
+
+`_config.toml`, `_prebuild.fsx` and `_finalize.fsx` are the only three special
+files Zest recognises. All live at the project root and are matched by exact
+name — no recursive scan, no other script name, no compatibility alias.
+Everything else is convention, never configuration.
+
+### `.zest.fsx` Routing
+
+A Zest Page is any `*.zest.fsx` file inside the content directory. Its path
+relative to that directory — with the `.zest.fsx` suffix stripped — is its
+route. A page never declares its own URL unless it sets `@permalink`.
+
+```text
+content/
+├── index.zest.fsx          → /
+├── 404.zest.fsx            → /404
+├── about.zest.fsx          → /about
+├── blog/
+│   ├── index.zest.fsx      → /blog
+│   └── post.zest.fsx       → /blog/post
+└── scripts/
+    └── build.fsx           → ordinary F# script, no route
+```
+
+Zest emits directory-style URLs, so every route above is written as
+`<route>/index.html` and is served with a trailing slash — `/about/` for
+`about.zest.fsx`, `/blog/` for `blog/index.zest.fsx`, and so on. `/` is the one
+route with no further segment. Both `/about` and `/about/` resolve to
+`about/index.html` on the dev server and on ordinary static hosts.
+
+Three details follow from this:
+
+- **`index` names their directory.** `index.zest.fsx` (and `default.zest.fsx`)
+  collapses to the route of its parent directory, so `blog/index.zest.fsx` is
+  `/blog`, not `/blog/index`.
+- **`@permalink` overrides everything.** Use it when the URL must be exact —
+  the starter's feeds do this (`// @permalink /rss.xml`), as would a 404 page
+  that has to be `/404.html` rather than `/404/`.
+- **Only `.zest.fsx` routes.** Renaming `scripts/build.fsx` to
+  `scripts/build.zest.fsx` would publish it at `/scripts/build/`. Leave a URL
+  that should not exist as a plain `.fsx`.
+
+When two files would produce the same output — `about.ztk` beside
+`about.zest.fsx`, say — Zest does not arbitrate. Whichever page is written last
+wins, so give each route exactly one source file.
+
+### ZCSS Reference
+
+| Feature              | Syntax / Example                                                          |
+|----------------------|---------------------------------------------------------------------------|
+| Variables (SCSS)     | `$name: value;`                                                           |
+| Variables (F#)       | `let name = value`                                                        |
+| Math                 | `let x = 0.25r * 4`                                                       |
+| Color functions      | `lighten(#hex, %)`, `darken(#hex, %)`, `mix(a, b, %)`                     |
+| Pipe operator        | `value \|> fn(args)` → `fn(value, args)`                                  |
+| Unit shorthands      | `r` → `rem`, `p` → `%`                                                    |
+| Property shorthands  | `py` → `padding-block`, `mx` → `margin-inline`, `bgc` → `background-color`|
+| Nesting              | Indent or brace mode                                                      |
+| Mixins               | `@mixin`, `@include`                                                      |
+| Loops                | `@each`, `@for`                                                           |
+| Conditionals         | `@if`, `@else`                                                            |
+| Built-in modules     | `@use "zest:utilities"`, `@use "zest:palette"`, etc.                      |
+
+### Layout Routing
+
+Zest always renders with Zestucks, so
+routing depends only on the file extension:
+
+| Layout extension | Handling                                                    |
+|------------------|-------------------------------------------------------------|
+| `.zest.fsx`, `.fsx` | Evaluated as F# scripts by `dotnet fsi`.                 |
+| `.ztk`, `.njk`   | Rendered by Zestucks — the same language, two extensions.    |
+| `.html`, `.htm`  | Rendered by Zestucks when `{{ }}` / `{% %}` syntax is present, otherwise copied verbatim. |
+
+This table describes `_layouts/` only. Layout files have no route, so a plain
+`.fsx` layout is fine — inside the content directory it would not be a page at
+all (see *File Types*).
+
+### Zestucks Compatibility Mode
+
+`[template.zestucks] compatibility` in `_config.toml` controls how strictly
+Zestucks mirrors Nunjucks:
+
+| Value     | Meaning                                                        |
+|-----------|----------------------------------------------------------------|
+| `zest`    | Default. Zest extension filters (`pages_by_tag`, `recent`, `by_collection`, `search`) are available. |
+| `strict`  | Only the Nunjucks-compatible filter set is registered.          |
+
+### HTML DSL Reference
+
+Two spellings are co-equal throughout the DSL: `<tag>Class` and `<tag>C`
+(`divC` ≡ `divClass`, `imgC` ≡ `imgClass`, `aC` ≡ `aClass`). Both produce
+byte-for-byte identical HTML — pick either and stay consistent within a file.
+For text helpers, `<tag>Text` takes text content while `<tag>TextClass` /
+`<tag>TextC` take a CSS class plus text content (`pText` vs `pTextClass`).
+
+```fsharp
+// Elements
+h1 [ text "Title" ]
+p  [ text "Paragraph" ]
+a  [ href "https://example.com"; text "Link" ]
+
+// Text shortcuts
+divText "Plain"                            // <div>Plain</div>
+pTextClass "lead" "Intro"                  // <p class="lead">Intro</p>
+aTextC "btn btn-primary" "/about" "About"  // <a href="/about" class="btn btn-primary">About</a>
+
+// Attributes
+div [ cls "container"; id' "main"; data' "section" "hero" ] [ ... ]
+
+// CSS class shortcuts
+divClass "card"  [ p [ text "Content" ] ]   // <div class="card">
+spanC   "badge" [ text "New" ]              // <span class="badge">
+
+// List comprehensions
+ul [ for item in items -> li [ text item ] ]
+
+// Conditionals
+if condition then
+    p [ text "Yes" ]
+else
+    p [ text "No" ]
+```
+
+### Build Hooks
+
+Zest runs at most two dynamic scripts. Both are optional, both live at the
+project root under exactly the name shown, and neither is routed or published.
+
+```text
+defaults → _config.toml → _prebuild.fsx → render + write _site/ → _finalize.fsx
+```
+
+The three files have one job each, and the split is enforced by what each one
+can actually see:
+
+| File            | Runs                    | Responsibility                                              | Cannot                                 |
+|-----------------|-------------------------|-------------------------------------------------------------|----------------------------------------|
+| `_config.toml`  | before everything       | Declare what the site *is*.                                 | Run code.                              |
+| `_prebuild.fsx` | before anything renders | Inject the data, filters and values templates read.         | Touch the build output.                |
+| `_finalize.fsx` | after `_site/` is complete | Inspect, index and reshape the finished output.          | Inject template data; write outside `_site/`. |
+
+There is no third hook and no `afterBuild` command list: running an external
+tool after the build is `exec` inside `_finalize.fsx`. A hook that fails is
+reported and fails the build, unless it opts out with `setFailOnError false`.
+
+#### `_prebuild.fsx` API
+
+Runs before the build. Data added here is visible to templates as
+`{{ site.<key> }}`.
+
+| Function              | Purpose                                          |
+|-----------------------|--------------------------------------------------|
+| `addGlobal key value` | Inject a key-value pair into global data.        |
+| `loadJson path`       | Parse a JSON file into dictionaries, arrays and scalars. |
+| `loadToml path`       | Parse a TOML file.                               |
+| `loadEnv key`         | Read an environment variable as `string option`. |
+| `consoleLog msg`      | Emit debug output to stderr.                     |
+| `exec cmd args`       | Run a shell command; returns `{ code; stdout; stderr }`. |
+
+`loadJson`, `loadToml`, `loadEnv`, `consoleLog` and `exec` are the same
+functions, with the same signatures, in both hooks.
+
+#### `_finalize.fsx` API
+
+Runs once the site has been fully written to `_site/`. Everything it writes
+must land inside the output directory — `writeFile` refuses any path outside
+`_site/` — so it can reshape the build output but never the project's sources.
+
+Injected context:
+
+| Binding     | Type          | Value                                            |
+|-------------|---------------|--------------------------------------------------|
+| `site`      | `SiteInfo`    | `title` `url` `description` `author` `language` `version` |
+| `pages`     | `PageInfo list` | every routed content page: `route` `output` `title` `source` |
+| `build`     | `BuildInfo`   | `duration_ms` `page_count` `asset_count` `output_bytes` `started_at` |
+| `output_dir`| `string`      | absolute path of the build output                |
+| `source_dir`| `string`      | absolute path of the content directory           |
+
+Helpers:
+
+| Function                    | Purpose                                                        |
+|-----------------------------|----------------------------------------------------------------|
+| `readFile path`             | Read a file (relative paths resolve against the project root).  |
+| `writeFile path content`    | Write a file inside `_site/` (relative paths resolve there).    |
+| `exists path`               | True when a file or directory exists.                          |
+| `listFiles path`            | Recursively list files, as paths relative to `path`.            |
+| `sizeOf path`               | Byte size of a file or directory tree.                         |
+| `toJson value`              | Serialize a value to indented JSON.                            |
+| `loadJson path`             | Parse a JSON file into dictionaries, arrays and scalars.        |
+| `loadToml path`             | Parse a TOML file.                                             |
+| `loadEnv key`               | Read an environment variable as `string option`.               |
+| `consoleLog msg`            | Emit debug output to stderr.                                   |
+| `exec cmd args`             | Run a shell command; returns `{ code; stdout; stderr }`.        |
+| `setFailOnError flag`       | `false` logs hook errors without failing the build.             |
+
+Output shaping — the replacement for the old `[build]` formatting flags:
+
+| Function                    | Purpose                                                        |
+|-----------------------------|----------------------------------------------------------------|
+| `rewriteFiles ext transform`| Apply `transform` to every file of that extension under `_site/`.|
+| `formatHtml html`           | Pretty-print HTML.                                             |
+| `minifyHtml html`           | Minify HTML.                                                   |
+| `formatCss css`             | Pretty-print CSS (2-space indent).                             |
+| `minifyCss css`             | Minify CSS.                                                    |
+| `formatJs js`               | Pretty-print JavaScript (2-space indent).                      |
+| `minifyJs js`               | Minify JavaScript.                                             |
+
+Conversion APIs — the Markdown engine and the image processor, as one entry
+point each:
+
+| Function                      | Purpose                                                      |
+|-------------------------------|--------------------------------------------------------------|
+| `md markdownText`             | Render Markdown to HTML (Markdig, same engine as the pages).  |
+| `imageDefaults`               | Default `ImageOptions`, pre-bound to `output_dir`/`source_dir`. |
+| `processImages options`       | Process the site's images and rewrite their references.       |
+
+`processImages` finds every processable image in the output plus every image
+in the content directory (one sitting next to a Markdown page is pulled in
+automatically), then for each: downscales to `MaxWidth`, re-encodes at
+`Quality` into `Format` (WebP by default), writes the `Variants` widths beside
+it, and rewrites every `<img src>`, `og:image` / `twitter:image` and CSS
+`url()` reference to the new file. `OutputDir` collects the results under one
+directory; `BaseUrl` points the references at an image host / CDN instead of
+local paths (the files are still written locally, so upload them with `exec`);
+`ReplaceSource` (default `true`) removes the pre-conversion copy from the
+output — source files are never touched. A skipped image (target already up to
+date) still rewrites its references, and a per-image failure is collected in
+`report.Errors` without failing the run:
+
+```fsharp
+let report =
+    processImages
+        { imageDefaults with
+            Quality = 75
+            MaxWidth = 1600
+            Variants = [ { Width = 480; Suffix = "-thumb" } ] }
+
+eprintf "  images: %d processed, %d variants, %d failed"
+    report.ImagesProcessed report.VariantsWritten (List.length report.Errors)
+```
+
+A complete pretty-printed + minified build, which is what the four removed
+`_config.toml` keys used to do:
+
+```fsharp
+rewriteFiles ".html" formatHtml
+rewriteFiles ".css" formatCss
+rewriteFiles ".js" formatJs
+```
+
+Swap `formatHtml` for `minifyHtml`, and the `format*` helpers for the `minify*`
+ones, to minify instead. Nothing is written unless the text actually changes,
+so a hook that is a no-op leaves the output untouched.
+
+Example — check internal links, index the site, and report the build:
+
+```fsharp
+// Report every page whose body references a route that was not rendered.
+let routes = pages |> List.map (fun p -> p.route) |> Set.ofList
+let broken =
+    pages
+    |> List.collect (fun p ->
+        let html = readFile p.output
+        Regex.Matches(html, "href=\"(/[^\"]*)\"")
+        |> Seq.map (fun m -> m.Groups.[1].Value)
+        |> Seq.filter (fun href -> not (Set.contains href routes))
+        |> Seq.map (fun href -> sprintf "%s -> %s" p.route href)
+        |> List.ofSeq)
+
+if not broken.IsEmpty then
+    consoleLog (sprintf "Found %d broken link(s)" broken.Length)
+    broken |> List.iter consoleLog
+    setFailOnError true
+
+// Write a search index next to the rendered pages.
+let index =
+    pages
+    |> List.map (fun p -> {| route = p.route; title = (p.title |> Option.defaultValue "") |})
+
+writeFile "search-index.json" (toJson index)
+
+// Report the build.
+consoleLog (sprintf "Done: %d pages, %d ms, %d bytes"
+                    build.page_count build.duration_ms build.output_bytes)
+
+// Hand off to an external tool when one is available.
+let purge = exec "node" [ "scripts/purge-cdn.js"; site.url ]
+if purge.code <> 0 then consoleLog (sprintf "CDN purge failed: %s" purge.stderr)
+```
+
+`finalize_on_error` (default `true`) controls whether the hook still runs when
+the main build already reported errors, which is what makes "validate what was
+written, even on a bad build" possible.
+
+---
+
+## Building from Source
+
+```bash
+git clone https://github.com/zest-ssg/zest
+cd zest
+dotnet build zest.sln
+
+# Publish for your platform
+dotnet publish src/Zest.App/Zest.App.csproj -c Release -r win-x64 --self-contained false
+# Linux:  -r linux-x64
+# macOS:  -r osx-arm64
+```
+
+---
+
+## Design Philosophy
+
+1. **Content is code, code is content.** The F# DSL and the template engine share a single data model, so nothing is lost at the boundary.
+2. **No magic.** Every transformation is a plain pipeline stage readable in the source. No hidden runtime and no implied dependencies.
+3. **Speed is a feature.** Parallel compilation, minimal allocations, and caching are part of the core design, not an afterthought.
+4. **The output is the deliverable.** Static HTML, no JavaScript required, host it anywhere.
+
+Zest is not a general-purpose static site generator. It is a specific answer to specific constraints: F# as the template, TOML as the contract, no Node.js, and no YAML.
+
+---
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).

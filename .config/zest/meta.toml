@@ -1,0 +1,14 @@
+# ─── Zest CLI Branding ────────────────────────────────
+# CLI name, version, and the tagline shown in `zest --help`.
+# Embedded as the manifest resource `zest.meta.toml` and read by
+# Zest.App.CommandLine.HelpRenderer. During local development the
+# renderer falls back to this file on disk.
+#
+# This file is the single source of truth for the version: Directory.Build.props
+# reads <Version>/<AssemblyVersion>/<FileVersion> from here, and the help banner
+# prints whichever version this file declares.
+
+[meta]
+version    = "0.9.0"
+header     = "Zest v{0} — Easy Static-site Toolkit"
+ecosystem  = "Ecosystem: .zest.fsx + .html + .zcss"

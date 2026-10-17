@@ -1,0 +1,41 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+*.userprefs
+
+# Build outputs
+*.exe
+*.dll
+*.pdb
+*.xml
+*.nupkg
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code per-developer overrides (shared config is committed)
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Zest
+docs/
+site/
+themes/
+
+# NuGet packages
+packages/
+*.nuget.props
+*.nuget.targets
+
+# Logs
+*.log

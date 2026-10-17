@@ -1,0 +1,131 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- F# compiles top-down: a file may only reference symbols declared in
+       earlier files, so the list below is ordered by dependency. Each group
+       maps to one directory, and the namespace of every file matches its
+       directory exactly (namespace = directory path, last segment included).
+
+       Two directories are deliberately split across two groups to break
+       dependency cycles:
+         Build/      — PermalinkRouter / FrontMatterParser / LocaleLoader must
+                       exist before the Zestucks engine, while the pipeline and
+                       BuildRunner need the engine.
+         Zestucks/   — the engine core must exist before Rendering, while
+                       ZestucksFilters needs both Rendering and the engine. -->
+  <ItemGroup>
+    <!-- Model: types with no behaviour -->
+    <Compile Include="Model/FileTypes.fs" />
+    <Compile Include="Model/ContentPage.fs" />
+    <Compile Include="Model/ContentMeta.fs" />
+    <Compile Include="Model/BuildTypes.fs" />
+    <Compile Include="Model/SiteConfig.fs" />
+    <Compile Include="Model/SitePaths.fs" />
+    <Compile Include="Model/Slug.fs" />
+    <Compile Include="Model/Diagnostics.fs" />
+
+    <!-- Media: the built-in image processor (ImageSharp-backed) -->
+    <Compile Include="Media/ImageProcessor.fs" />
+
+    <!-- Zcss: the ZCSS compiler (syntax → evaluation → parsing → builtins → compilation) -->
+    <Compile Include="Zcss/Ast.fs" />
+    <Compile Include="Zcss/CoreParser.fs" />
+    <Compile Include="Zcss/BuiltinFunctions.fs" />
+    <Compile Include="Zcss/ColorPipeline.fs" />
+    <Compile Include="Zcss/MathEvaluator.fs" />
+    <Compile Include="Zcss/Evaluator.fs" />
+    <Compile Include="Zcss/BraceParser.fs" />
+    <Compile Include="Zcss/IndentParser.fs" />
+    <Compile Include="Zcss/Parser.fs" />
+    <Compile Include="Zcss/BuiltinStyles.fs" />
+    <Compile Include="Zcss/UseResolver.fs" />
+    <Compile Include="Zcss/Modules.fs" />
+    <Compile Include="Zcss/Cache.fs" />
+    <Compile Include="Zcss/CssWriter.fs" />
+    <Compile Include="Zcss/Engine.fs" />
+
+    <!-- Build (early): front matter, permalinks and locale tables -->
+    <Compile Include="Build/PermalinkRouter.fs" />
+    <Compile Include="Build/FrontMatterParser.fs" />
+    <Compile Include="Build/LocaleLoader.fs" />
+
+    <!-- Zestucks: the template engine -->
+    <Compile Include="Zestucks/Tokens.fs" />
+    <Compile Include="Zestucks/Tokenizer.fs" />
+    <Compile Include="Zestucks/ExpressionCompiler.fs" />
+    <Compile Include="Zestucks/Evaluator.fs" />
+    <Compile Include="Zestucks/BlockCollector.fs" />
+    <Compile Include="Zestucks/Renderer.fs" />
+    <Compile Include="Zestucks/Engine.fs" />
+    <Compile Include="Zestucks/EngineHost.fs" />
+
+    <!-- Rendering: nodes, HTML writing, Markdown and page construction -->
+    <Compile Include="Rendering/Escape.fs" />
+    <Compile Include="Rendering/Elements.fs" />
+    <Compile Include="Rendering/Attributes.fs" />
+    <Compile Include="Rendering/Modifiers.fs" />
+    <Compile Include="Rendering/Components.fs" />
+    <Compile Include="Rendering/HtmlWriter.fs" />
+    <Compile Include="Rendering/Formatting.fs" />
+    <Compile Include="Rendering/Markdown.fs" />
+    <Compile Include="Rendering/PageBuilder.fs" />
+    <Compile Include="Rendering/Partials.fs" />
+    <Compile Include="Rendering/Authoring.fs" />
+    <Compile Include="Rendering/Shortcodes.fs" />
+    <Compile Include="Rendering/PagedResult.fs" />
+    <Compile Include="Rendering/PageData.fs" />
+    <Compile Include="Rendering/Pjax.fs" />
+
+    <!-- Execution: FSI evaluation, page index and Zestucks filters -->
+    <Compile Include="Execution/FsiSession.fs" />
+    <!-- DslAssembly must precede the hook scripts: they reuse its isolated
+         assembly folder to reference the output-shaping helpers. -->
+    <Compile Include="Execution/DslAssembly.fs" />
+    <Compile Include="Execution/ScriptHost.fs" />
+    <Compile Include="Execution/PrebuildScript.fs" />
+    <Compile Include="Execution/FinalizeScript.fs" />
+    <Compile Include="Execution/PageStore.fs" />
+    <Compile Include="Execution/ZestucksFilters.fs" />
+    <Compile Include="Execution/FsiRunner.fs" />
+    <Compile Include="Execution/PageEvaluator.fs" />
+
+    <!-- Build (late): the pipeline, generated pages and the build runner -->
+    <Compile Include="Build/BuildProgress.fs" />
+    <Compile Include="Build/IncrementalCache.fs" />
+    <Compile Include="Build/AtomicFile.fs" />
+    <Compile Include="Build/GlobalData.fs" />
+    <Compile Include="Build/AssetWriter.fs" />
+    <Compile Include="Build/LayoutChain.fs" />
+    <Compile Include="Build/ArchiveSupport.fs" />
+    <Compile Include="Build/PagePipeline.fs" />
+    <Compile Include="Build/TaxonomyGenerator.fs" />
+    <Compile Include="Build/PaginationGenerator.fs" />
+    <Compile Include="Build/BuildRunner.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Zest.Core lives in src/ next to the shipped projects and has no
+         dependencies of its own. Keeping the shared primitives there lets the
+         DSL depend on them without depending on the whole build pipeline. -->
+    <ProjectReference Include="..\Zest.Core\Zest.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tomlyn" Version="0.17.0" />
+    <!-- Markdown parsing (CommonMark + tables / task lists / footnotes /
+         auto-identifiers / autolinks / inline HTML) and image processing
+         (decode, resize, re-encode) for the built-in media pipeline. Both
+         are transitive dependencies of Zest.Markup, so the FSI isolation
+         copy in DslAssembly carries them into every hook script.
+         ImageSharp is pinned to the 3.1 line: it is the last Apache-2.0
+         release, and 4.x requires a paid license for Release builds. The
+         advisories NU1902/NU1903 report are decoder issues on malformed
+         input; Zest processes the site author's own images, which are
+         trusted content, and the 4.x alternative is not licensable for a
+         tool whose users build from source. Suppressed per advisory. -->
+    <PackageReference Include="Markdig" Version="1.4.1" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12">
+      <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
