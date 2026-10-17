@@ -11,6 +11,7 @@ let siteUrl = (let u = opt "site.base_url" in if u <> "" then u else "https://ex
 let siteTitle = if opt "site.title" <> "" then opt "site.title" else "Zest Site"
 let siteDesc = opt "site.description"
 let author = opt "site.author"
+let language = opt "site.language"
 
 // Posts only — the same set the RSS feed carries; see feed.zest.fsx.
 let articles =
@@ -20,4 +21,6 @@ let articles =
     |> Array.map (fun p ->
         { url = p.url; title = p.title; date = p.date; description = p.description } : Feeds.FeedItem)
 
-printfn "%s" (Feeds.atomXml siteTitle siteUrl siteDesc author articles)
+// The first two arguments must agree with the @permalink directive above:
+// the feed's own path (the self link and the feed id) and the site language.
+printfn "%s" (Feeds.atomXml "/atom.xml" language siteTitle siteUrl siteDesc author articles)

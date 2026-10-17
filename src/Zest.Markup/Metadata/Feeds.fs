@@ -11,7 +11,7 @@ module Feeds =
 
     /// A single feed entry (RSS/Atom). Named record — unlike anonymous
     /// records, named types unify across assembly boundaries, so FSI page
-    /// scripts can construct these and call rssXml / rssXmlAt / atomXml directly.
+    /// scripts can construct these and call rssXml / atomXml directly.
     type FeedItem = {
         url: string
         title: string
@@ -40,12 +40,16 @@ module Feeds =
     let private rfc822 (d: DateTime) =
         d.ToString("ddd, dd MMM yyyy HH:mm:ss 'GMT'", Globalization.CultureInfo.InvariantCulture)
 
-    /// Generate an RSS 2.0 feed whose <atom:link rel="self"> points at
-    /// `feedPath` (e.g. "/feed.xml"), for a feed not served at /rss.xml.
-    let rssXmlAt (feedPath: string) (siteTitle: string) (siteUrl: string) (siteDescription: string) (pages: FeedItem[]) =
+    /// Generate an RSS 2.0 feed. `feedPath` is the feed's own site-relative
+    /// URL (e.g. "/feed.xml"), published as <atom:link rel="self">; `language`
+    /// is the site language code (e.g. "en" or "zh-CN") for <language>.
+    let rssXml (feedPath: string) (language: string) (siteTitle: string) (siteUrl: string) (siteDescription: string) (pages: FeedItem[]) =
         // Normalize once so joining with absolute paths cannot produce "//".
         let siteUrl = siteUrl.TrimEnd('/')
         let feedPath = if feedPath.StartsWith "/" then feedPath else "/" + feedPath
+        // RSS 2.0 requires <language>; "en" is the fallback for a site that
+        // declares none, because omitting the element makes the feed invalid.
+        let language = if String.IsNullOrWhiteSpace language then "en" else language.Trim()
         let sb = StringBuilder()
         sb.AppendLine("""<?xml version="1.0" encoding="utf-8"?>""") |> ignore
         sb.AppendLine("""<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">""") |> ignore
@@ -54,7 +58,7 @@ module Feeds =
         sb.AppendFormat("    <link>{0}</link>\n", xe siteUrl) |> ignore
         sb.AppendFormat("    <description>{0}</description>\n", xe siteDescription) |> ignore
         sb.AppendFormat("    <atom:link href=\"{0}{1}\" rel=\"self\" type=\"application/rss+xml\" />\n", xe siteUrl, xe feedPath) |> ignore
-        sb.AppendLine("    <language>en</language>") |> ignore
+        sb.AppendFormat("    <language>{0}</language>\n", xe language) |> ignore
         sb.AppendFormat("    <lastBuildDate>{0}</lastBuildDate>\n", rfc822 DateTime.UtcNow) |> ignore
         for page in pages do
             let pubDate =
@@ -76,24 +80,27 @@ module Feeds =
         sb.AppendLine("</rss>") |> ignore
         sb.ToString()
 
-    /// Generate an RSS 2.0 feed XML string from a list of pages, served at
-    /// "/rss.xml". Use `rssXmlAt` when the feed lives at another path.
-    let rssXml (siteTitle: string) (siteUrl: string) (siteDescription: string) (pages: FeedItem[]) =
-        rssXmlAt "/rss.xml" siteTitle siteUrl siteDescription pages
-
-    /// Generate an Atom 1.0 feed XML string.
-    let atomXml (siteTitle: string) (siteUrl: string) (siteDescription: string) (authorName: string) (pages: FeedItem[]) =
+    /// Generate an Atom 1.0 feed. `feedPath` and `language` play the same
+    /// roles as in rssXml: the feed's own site-relative URL (the self link
+    /// and the feed <id>) and the xml:lang of the feed's text.
+    let atomXml (feedPath: string) (language: string) (siteTitle: string) (siteUrl: string) (siteDescription: string) (authorName: string) (pages: FeedItem[]) =
         // Normalize once so joining with absolute paths cannot produce "//".
         let siteUrl = siteUrl.TrimEnd('/')
+        let feedPath = if feedPath.StartsWith "/" then feedPath else "/" + feedPath
+        // xml:lang is optional in Atom, so it appears only when the site
+        // declares a language.
+        let langAttr =
+            if String.IsNullOrWhiteSpace language then ""
+            else sprintf " xml:lang=\"%s\"" (xe (language.Trim()))
         let sb = StringBuilder()
         sb.AppendLine("""<?xml version="1.0" encoding="utf-8"?>""") |> ignore
-        sb.AppendLine("""<feed xmlns="http://www.w3.org/2005/Atom">""") |> ignore
+        sb.AppendFormat("<feed xmlns=\"http://www.w3.org/2005/Atom\"{0}>\n", langAttr) |> ignore
         sb.AppendFormat("  <title>{0}</title>\n", xe siteTitle) |> ignore
         sb.AppendFormat("  <subtitle>{0}</subtitle>\n", xe siteDescription) |> ignore
-        sb.AppendFormat("  <link href=\"{0}/atom.xml\" rel=\"self\" />\n", xe siteUrl) |> ignore
+        sb.AppendFormat("  <link href=\"{0}{1}\" rel=\"self\" />\n", xe siteUrl, xe feedPath) |> ignore
         sb.AppendFormat("  <link href=\"{0}\" rel=\"alternate\" />\n", xe siteUrl) |> ignore
         sb.AppendFormat("  <updated>{0}</updated>\n", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")) |> ignore
-        sb.AppendFormat("  <id>{0}/atom.xml</id>\n", xe siteUrl) |> ignore
+        sb.AppendFormat("  <id>{0}{1}</id>\n", xe siteUrl, xe feedPath) |> ignore
         if not (String.IsNullOrEmpty authorName) then
             sb.AppendFormat("  <author><name>{0}</name></author>\n", xe authorName) |> ignore
         for page in pages do
