@@ -283,6 +283,11 @@ module Formatting =
                 sb.AppendLine() |> ignore
             elif token.StartsWith("</") then
                 let tagName = token.Substring(2, token.Length - 3).TrimEnd('>')
+                // A closing </pre> sits inside the preserved block: any newline
+                // or indentation written before it stays part of the content
+                // and renders as a blank line under the code. Remember the flag
+                // before it is cleared below.
+                let closingPre = inPre && tagName = "pre"
                 if tagName = "pre" then inPre <- false
                 elif tagName = "script" then inScript <- false
                 elif tagName = "style" then inStyle <- false
@@ -296,9 +301,14 @@ module Formatting =
                     pendingInline <- false
                     if not (token.EndsWith("/>")) then
                         if depth > 0 then depth <- depth - 1
-                    sb.AppendLine() |> ignore
-                    sb.Append(String.replicate depth indent) |> ignore
-                    sb.Append(token.Trim()) |> ignore
+                    if closingPre then
+                        // Stay flush against the last line of code, with no
+                        // preceding newline or indent.
+                        sb.Append(token.Trim()) |> ignore
+                    else
+                        sb.AppendLine() |> ignore
+                        sb.Append(String.replicate depth indent) |> ignore
+                        sb.Append(token.Trim()) |> ignore
             elif token.StartsWith("<") && token.EndsWith("/>") then
                 // Self-closing tag — add trailing newline so the next
                 // token starts on a fresh line regardless of its type.

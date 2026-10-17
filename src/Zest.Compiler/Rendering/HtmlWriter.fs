@@ -79,10 +79,13 @@ module HtmlWriter =
                 sprintf "%s<%s%s>" ws tag attrStr
             elif ch.IsEmpty then
                 sprintf "%s<%s%s></%s>" ws tag attrStr tag
-            elif blockTags.Contains tag then
+            elif blockTags.Contains tag && tag <> "pre" then
                 let inner = ch |> List.map (renderNodePretty (indent + 1)) |> String.concat "\n"
                 sprintf "%s<%s%s>\n%s\n%s</%s>" ws tag attrStr inner ws tag
             else
+                // `<pre>` is excluded above: a newline and indent before
+                // `</pre>` are content, not layout, and render as a blank line
+                // under the code.
                 let inner = ch |> List.map (renderNodePretty 0) |> String.concat ""
                 sprintf "%s<%s%s>%s</%s>" ws tag attrStr inner tag
 
